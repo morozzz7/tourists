@@ -1,0 +1,257 @@
+.welcome-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.welcome-container.loading {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.welcome-container.error {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.welcome-container.error h1 {
+  color: white;
+  text-align: center;
+  font-size: 28px;
+}
+
+.welcome-container.error p {
+  text-align: center;
+  color: white;
+  margin-top: 20px;
+}
+
+.welcome-container.error a {
+  color: white;
+  text-decoration: underline;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(255, 255, 255, 0.3);
+  border-top: 5px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.character-section {
+  text-align: center;
+  color: white;
+  max-width: 500px;
+  opacity: 0;
+  transform: translateY(20px) scale(0.9);
+  transition: all 0.6s ease-out;
+  z-index: 10;
+  position: relative;
+}
+
+.character-section.show {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.character-image {
+  margin-bottom: 30px;
+  animation: float 3s ease-in-out infinite;
+}
+
+.avatar {
+  font-size: 120px;
+  display: inline-block;
+  animation: bounce 0.6s ease-out;
+}
+
+@keyframes bounce {
+  0% {
+    transform: translateY(-30px);
+    opacity: 0;
+  }
+  50% {
+    transform: translateY(10px);
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+
+.greeting h1 {
+  font-size: 48px;
+  margin-bottom: 10px;
+  animation: slideIn 0.6s ease-out 0.2s backwards;
+}
+
+.character-name {
+  font-size: 32px;
+  font-weight: bold;
+  margin-bottom: 20px;
+  animation: slideIn 0.6s ease-out 0.4s backwards;
+}
+
+.campaign-description {
+  font-size: 18px;
+  line-height: 1.6;
+  margin-bottom: 30px;
+  animation: slideIn 0.6s ease-out 0.6s backwards;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.stats {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  margin: 30px 0;
+  animation: slideIn 0.6s ease-out 0.8s backwards;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 15px 25px;
+  border-radius: 10px;
+  backdrop-filter: blur(10px);
+}
+
+.stat-number {
+  font-size: 32px;
+  font-weight: bold;
+  display: block;
+}
+
+.stat-label {
+  font-size: 12px;
+  opacity: 0.9;
+  margin-top: 5px;
+}
+
+.action-button {
+  background: white;
+  color: #667eea;
+  border: none;
+  padding: 15px 40px;
+  font-size: 18px;
+  font-weight: bold;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  animation: slideIn 0.6s ease-out 1s backwards;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.action-button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+}
+
+.action-button:active {
+  transform: translateY(-1px);
+}
+
+.background-animation {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.particle {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  animation: float-particle 20s infinite;
+}
+
+.particle:nth-child(1) {
+  left: 10%;
+  animation-delay: 0s;
+  width: 40px;
+  height: 40px;
+}
+
+.particle:nth-child(2) {
+  left: 20%;
+  top: 30%;
+  animation-delay: 5s;
+}
+
+.particle:nth-child(3) {
+  right: 10%;
+  top: 50%;
+  animation-delay: 10s;
+  width: 30px;
+  height: 30px;
+}
+
+@keyframes float-particle {
+  0% {
+    transform: translateY(100vh) translateX(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100vh) translateX(100px);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .avatar {
+    font-size: 80px;
+  }
+  
+  .greeting h1 {
+    font-size: 36px;
+  }
+  
+  .character-name {
+    font-size: 24px;
+  }
+  
+  .campaign-description {
+    font-size: 16px;
+  }
+}
