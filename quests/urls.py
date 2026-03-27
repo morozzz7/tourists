@@ -10,4 +10,5 @@ app_name = 'quests'
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('poi/', views.poi_proxy, name='poi-proxy'),
 ]

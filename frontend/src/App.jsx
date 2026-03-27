@@ -6,15 +6,6 @@ import CharacterWelcome from './components/CharacterWelcome'
 import mascotImg from './assets/hero.png'
 import './App.css'
 
-const menu = [
-  { id: 'routes', label: 'Экскурсии и квесты' },
-  { id: 'kids', label: 'Детский аудиогид' },
-  { id: 'achievements', label: 'Достижения' },
-  { id: 'rewards', label: 'Награды' },
-  { id: 'loyalty', label: 'Система лояльности' },
-  { id: 'faq', label: 'Часто задаваемые вопросы' },
-]
-
 const demoMessages = [
   {
     from: 'assistant',
@@ -54,23 +45,45 @@ const FullMapPage = ({ onSelectPoi }) => {
   )
 }
 
-const Home = ({ onOpenMap, onOpenModal, onSelectPoi }) => (
-  <div className="app">
+const Home = ({
+  onOpenModal,
+  onSelectPoi,
+  onToggleTheme,
+  theme,
+  sidebarOpen,
+  onToggleSidebar,
+}) => {
+  const navigate = useNavigate()
+  return (
+    <div className={`app ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
     <aside className="sidebar">
+      <button className="sidebar-toggle" onClick={onToggleSidebar}>
+        {sidebarOpen ? 'Свернуть' : 'Меню'}
+      </button>
       <div className="account">
         <div className="avatar" aria-hidden="true"></div>
-        <div>
+        <div className="account-info">
           <p className="account-title">Гость</p>
           <p className="account-subtitle">Рязань, на старте</p>
         </div>
       </div>
       <nav className="menu">
-        {menu.map((item) => (
-          <a key={item.id} href={`/#${item.id}`}>
-            {item.label}
-          </a>
-        ))}
+        <Link to="/routes">Экскурсии и квесты</Link>
+        <Link to="/kids">Детский аудиогид</Link>
+        <Link to="/achievements">Достижения</Link>
+        <Link to="/rewards">Награды</Link>
+        <Link to="/loyalty">Система лояльности</Link>
+        <Link to="/faq">Часто задаваемые вопросы</Link>
+        <Link to="/profile">Личный кабинет</Link>
       </nav>
+      <div className="auth-actions">
+        <button className="primary" onClick={() => onOpenModal('register')}>
+          Регистрация
+        </button>
+        <button className="ghost" onClick={() => onOpenModal('register')}>
+          Войти
+        </button>
+      </div>
       <div className="sidebar-note">
         <p className="note-title">Найди свой маршрут</p>
         <p className="note-text">
@@ -84,6 +97,9 @@ const Home = ({ onOpenMap, onOpenModal, onSelectPoi }) => (
       <Link className="ghost link-map" to="/admin/qr">
         QR-админ
       </Link>
+      <button className="theme-toggle" onClick={onToggleTheme}>
+        {theme === 'light' ? 'Темная тема' : 'Светлая тема'}
+      </button>
     </aside>
 
     <main className="main">
@@ -101,19 +117,13 @@ const Home = ({ onOpenMap, onOpenModal, onSelectPoi }) => (
             <div className="register-card">
               <p className="register-title">Войти или создать профиль</p>
               <p className="register-subtitle">
-                Сохраняй прогресс и обменивай баллы на призы.
+                Кнопки регистрации находятся в блоке личного кабинета слева.
               </p>
-              <button className="primary" onClick={() => onOpenModal('register')}>
-                Регистрация
-              </button>
-              <button className="ghost" onClick={() => onOpenModal('register')}>
-                Войти
-              </button>
             </div>
           </div>
 
           <div className="map-shell">
-            <button className="map-full-btn" onClick={onOpenMap}>
+            <button className="map-full-btn" onClick={() => navigate('/map')}>
               На весь экран
             </button>
             <RyazanMap onSelectPoi={onSelectPoi} />
@@ -125,19 +135,27 @@ const Home = ({ onOpenMap, onOpenModal, onSelectPoi }) => (
           </div>
         </div>
 
-        <div className="mascot-panel">
-          <div className="speech">
-            <p className="speech-title">Привет! Давай начнем путешествие.</p>
-            <p>
-              Хочешь узнать больше о Рязани и Рязанской области? Пройди
-              небольшую анкету, чтобы я знал, что тебе нравится.
-            </p>
-            <button className="primary" onClick={() => onOpenModal('survey')}>
-              Пройти тестирование
+          <div className="mascot-panel">
+            <div className="speech">
+              <p className="speech-title">Привет! Давай начнем путешествие.</p>
+              <p>
+                Хочешь узнать больше о Рязани и Рязанской области? Пройди
+                небольшую анкету, чтобы я знал, что тебе нравится.
+              </p>
+            <button className="primary" onClick={() => onOpenModal('legend')}>
+              Легенда помощника
             </button>
-          </div>
-          <div className="mascot" aria-hidden="true">
-            <img src={mascotImg} alt="" />
+            </div>
+          <div
+            className="mascot"
+            role="button"
+            tabIndex={0}
+            onClick={() => onOpenModal('legend')}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') onOpenModal('legend')
+            }}
+          >
+            <img src={mascotImg} alt="Буба" />
             <p className="mascot-name">Буба, проводник по Рязани</p>
           </div>
         </div>
@@ -277,7 +295,8 @@ const Home = ({ onOpenMap, onOpenModal, onSelectPoi }) => (
       </section>
     </main>
   </div>
-)
+  )
+}
 
 function App() {
   const [chatOpen, setChatOpen] = useState(false)
@@ -287,6 +306,9 @@ function App() {
   const [modalType, setModalType] = useState(null)
   const [selectedPoi, setSelectedPoi] = useState(null)
   const [poiSummary, setPoiSummary] = useState(null)
+  const [profile, setProfile] = useState({ name: '', email: '' })
+  const [registerStatus, setRegisterStatus] = useState(null)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
 
   useEffect(() => {
     const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches
@@ -296,6 +318,10 @@ function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme
   }, [theme])
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))
+  }
 
   useEffect(() => {
     const fetchSummary = async () => {
@@ -342,11 +368,13 @@ function App() {
 
   const openModal = (type) => {
     setModalType(type)
+    setRegisterStatus(null)
   }
 
   const closeModal = () => {
     setModalType(null)
     setSelectedPoi(null)
+    setRegisterStatus(null)
   }
 
   const handleSelectPoi = (poi) => {
@@ -361,9 +389,12 @@ function App() {
           path="/"
           element={
             <Home
-              onOpenMap={() => window.location.assign('/map')}
               onOpenModal={openModal}
               onSelectPoi={handleSelectPoi}
+              onToggleTheme={toggleTheme}
+              theme={theme}
+              sidebarOpen={sidebarOpen}
+              onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
             />
           }
         />
@@ -446,6 +477,39 @@ function App() {
           }
         />
         <Route
+          path="/profile"
+          element={
+            <PageShell
+              title="Личный кабинет"
+              subtitle="Ваш прогресс, достижения и награды."
+            >
+              <div className="profile-card">
+                <div className="profile-avatar"></div>
+                <div>
+                  <p className="profile-name">{profile.name || 'Гость'}</p>
+                  <p className="profile-email">{profile.email || 'Не указан'}</p>
+                </div>
+              </div>
+              <div className="cards">
+                {['Первооткрыватель', 'Городской следопыт'].map((title) => (
+                  <article key={title} className="card">
+                    <h3>{title}</h3>
+                    <p>Достижение открывает награду.</p>
+                  </article>
+                ))}
+              </div>
+              <div className="cards">
+                {['Скидка на кофе', 'Билет в музей'].map((title) => (
+                  <article key={title} className="card">
+                    <h3>{title}</h3>
+                    <p>Награда за достижение.</p>
+                  </article>
+                ))}
+              </div>
+            </PageShell>
+          }
+        />
+        <Route
           path="/loyalty"
           element={
             <PageShell
@@ -503,39 +567,51 @@ function App() {
                   Создай профиль, чтобы сохранять прогресс и баллы.
                 </p>
                 <form className="modal-form">
-                  <input type="text" placeholder="Имя" />
-                  <input type="email" placeholder="Email" />
+                  <input
+                    type="text"
+                    placeholder="Имя"
+                    value={profile.name}
+                    onChange={(event) =>
+                      setProfile((prev) => ({ ...prev, name: event.target.value }))
+                    }
+                  />
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    value={profile.email}
+                    onChange={(event) =>
+                      setProfile((prev) => ({ ...prev, email: event.target.value }))
+                    }
+                  />
                   <input type="password" placeholder="Пароль" />
-                  <button className="primary" type="button">
+                  <button
+                    className="primary"
+                    type="button"
+                    onClick={() => setRegisterStatus('ok')}
+                  >
                     Создать аккаунт
                   </button>
+                  {registerStatus === 'ok' && (
+                    <p className="modal-success">Профиль создан локально.</p>
+                  )}
                 </form>
               </div>
             )}
 
-            {modalType === 'survey' && (
+            {modalType === 'legend' && (
               <div className="modal-body">
-                <h3>Анкета интересов</h3>
+                <h3>Легенда Бубы</h3>
                 <p className="modal-subtitle">
-                  Расскажи, что тебе нравится, чтобы мы собрали подходящие маршруты.
+                  Буба — хранитель рязанских троп. Он появился из старого леса,
+                  чтобы помогать путешественникам находить тайные истории города.
                 </p>
-                <form className="modal-form">
-                  <label className="checkbox">
-                    <input type="checkbox" /> История и архитектура
-                  </label>
-                  <label className="checkbox">
-                    <input type="checkbox" /> Природа и парки
-                  </label>
-                  <label className="checkbox">
-                    <input type="checkbox" /> Семейные прогулки
-                  </label>
-                  <label className="checkbox">
-                    <input type="checkbox" /> Музеи и выставки
-                  </label>
-                  <button className="primary" type="button">
-                    Сохранить
-                  </button>
-                </form>
+                <p>
+                  Говорят, что его грибная шляпа меняет цвет, когда рядом есть
+                  новая история или забытая легенда.
+                </p>
+                <button className="primary" type="button" onClick={closeModal}>
+                  Спасибо, Буба!
+                </button>
               </div>
             )}
 

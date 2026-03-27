@@ -11,84 +11,113 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 })
 
+const RYAZAN_CENTER = [54.6292, 39.7351]
+const OVERPASS_ENDPOINTS = [
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.openstreetmap.ru/api/interpreter',
+  'https://overpass.nchc.org.tw/api/interpreter',
+  'https://overpass-api.de/api/interpreter',
+]
+const FALLBACK_LOCATIONS = [
+  {
+    id: 'fallback-1',
+    name: 'Рязанский Кремль',
+    category: 'attraction',
+    coords: [54.6348, 39.7486],
+    tags: {},
+  },
+  {
+    id: 'fallback-2',
+    name: 'Памятник Есенину',
+    category: 'monument',
+    coords: [54.636, 39.747],
+    tags: {},
+  },
+  {
+    id: 'fallback-3',
+    name: 'Грибы с глазами',
+    category: 'art',
+    coords: [54.6288, 39.7345],
+    tags: {},
+  },
+]
+const TERRITORIES = [
+  { id: 't1', name: 'Кремль', bounds: [[54.633, 39.742], [54.638, 39.752]] },
+  { id: 't2', name: 'Соборная', bounds: [[54.629, 39.737], [54.634, 39.746]] },
+  { id: 't3', name: 'Набережная', bounds: [[54.625, 39.731], [54.631, 39.739]] },
+  { id: 't4', name: 'ЦПКиО', bounds: [[54.624, 39.742], [54.629, 39.751]] },
+  { id: 't5', name: 'Музейный квартал', bounds: [[54.631, 39.752], [54.636, 39.760]] },
+  { id: 't6', name: 'Лыбедский бульвар', bounds: [[54.626, 39.724], [54.632, 39.733]] },
+]
+
+const fetchFromOverpass = async (query) => {
+  let lastError = null
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 12000)
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: query,
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        if (response.status === 429 || response.status >= 500) {
+          lastError = new Error(`Overpass ${response.status}`)
+          continue
+        }
+        throw new Error(`Overpass ${response.status}`)
+      }
+      return await response.json()
+    } catch (err) {
+      lastError = err
+    }
+  }
+  throw lastError || new Error('Overpass error')
+}
+
 const RyazanMap = ({ onSelectPoi }) => {
-  const ryazanCenter = [54.6292, 39.7351]
   const [locations, setLocations] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  const fallbackLocations = [
-    {
-      id: 'fallback-1',
-      name: 'Рязанский Кремль',
-      category: 'attraction',
-      coords: [54.6348, 39.7486],
-      tags: {},
-    },
-    {
-      id: 'fallback-2',
-      name: 'Памятник Есенину',
-      category: 'monument',
-      coords: [54.636, 39.747],
-      tags: {},
-    },
-    {
-      id: 'fallback-3',
-      name: 'Грибы с глазами',
-      category: 'art',
-      coords: [54.6288, 39.7345],
-      tags: {},
-    },
-  ]
-
-  const territories = [
-    { id: 't1', name: 'Кремль', bounds: [[54.633, 39.742], [54.638, 39.752]] },
-    { id: 't2', name: 'Соборная', bounds: [[54.629, 39.737], [54.634, 39.746]] },
-    { id: 't3', name: 'Набережная', bounds: [[54.625, 39.731], [54.631, 39.739]] },
-    { id: 't4', name: 'ЦПКиО', bounds: [[54.624, 39.742], [54.629, 39.751]] },
-    { id: 't5', name: 'Музейный квартал', bounds: [[54.631, 39.752], [54.636, 39.760]] },
-    { id: 't6', name: 'Лыбедский бульвар', bounds: [[54.626, 39.724], [54.632, 39.733]] },
-  ]
-
   const [captured, setCaptured] = useState(new Set(['t1', 't3']))
-  const progress = Math.round((captured.size / territories.length) * 100)
+  const progress = Math.round((captured.size / TERRITORIES.length) * 100)
 
   useEffect(() => {
     const fetchPoi = async () => {
       try {
         setLoading(true)
+        setError(null)
         const query =
           '[out:json][timeout:25];\n' +
           '(\n' +
           '  node["tourism"="attraction"](around:5000,' +
-          ryazanCenter[0] +
+          RYAZAN_CENTER[0] +
           ',' +
-          ryazanCenter[1] +
+          RYAZAN_CENTER[1] +
           ');\n' +
           '  node["tourism"="museum"](around:5000,' +
-          ryazanCenter[0] +
+          RYAZAN_CENTER[0] +
           ',' +
-          ryazanCenter[1] +
+          RYAZAN_CENTER[1] +
           ');\n' +
           '  node["historic"="monument"](around:5000,' +
-          ryazanCenter[0] +
+          RYAZAN_CENTER[0] +
           ',' +
-          ryazanCenter[1] +
+          RYAZAN_CENTER[1] +
           ');\n' +
           '  node["historic"="memorial"](around:5000,' +
-          ryazanCenter[0] +
+          RYAZAN_CENTER[0] +
           ',' +
-          ryazanCenter[1] +
+          RYAZAN_CENTER[1] +
           ');\n' +
           ');\n' +
           'out body 60;\n'
-        const response = await fetch('https://overpass-api.de/api/interpreter', {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
-          body: query,
-        })
-        if (response.ok === false) throw new Error('Overpass error')
-        const data = await response.json()
+        const data = await fetchFromOverpass(query)
         const normalized = (data.elements || [])
           .filter((el) => el.type === 'node')
           .map((el) => {
@@ -112,14 +141,14 @@ const RyazanMap = ({ onSelectPoi }) => {
           })
           .slice(0, 40)
         if (normalized.length === 0) {
-          setLocations(fallbackLocations)
+          setLocations(FALLBACK_LOCATIONS)
           setError('Точки из API не найдены, показаны демо-локации')
         } else {
           setLocations(normalized)
           setError(null)
         }
       } catch (err) {
-        setLocations(fallbackLocations)
+        setLocations(FALLBACK_LOCATIONS)
         setError('Не удалось загрузить точки интереса, показаны демо-локации')
       } finally {
         setLoading(false)
@@ -127,7 +156,7 @@ const RyazanMap = ({ onSelectPoi }) => {
     }
 
     fetchPoi()
-  }, [ryazanCenter])
+  }, [])
 
   const toggleCapture = (id) => {
     setCaptured((prev) => {
@@ -145,12 +174,12 @@ const RyazanMap = ({ onSelectPoi }) => {
 
   return (
     <div className="map-frame">
-      <MapContainer center={ryazanCenter} zoom={14} style={{ height: '100%', width: '100%' }}>
+      <MapContainer center={RYAZAN_CENTER} zoom={14} style={{ height: '100%', width: '100%' }}>
         <TileLayer
           url="https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png"
           attribution='&copy; OpenStreetMap contributors'
         />
-        {territories.map((territory) => (
+        {TERRITORIES.map((territory) => (
           <Rectangle
             key={territory.id}
             bounds={territory.bounds}

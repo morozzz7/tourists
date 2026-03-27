@@ -39,7 +39,6 @@ INSTALLED_APPS = [
     'corsheaders',
     # Local apps
     'quests.apps.QuestsConfig',
-    'tourists.apps.TouristsConfig',
 ]
 
 MIDDLEWARE = [

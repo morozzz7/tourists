@@ -2,12 +2,17 @@
 # А В КОНЕЦ ДОБАВЬТЕ ЭТО:
 
 from rest_framework import viewsets, status
+from rest_framework.decorators import api_view
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 import qrcode
 from io import BytesIO
 import base64
+import urllib.request
+import urllib.parse
+import json
 from .models import QRCampaign, QRCodeLink
 from .serializers import QRCampaignSerializer, QRCodeLinkSerializer
 
@@ -90,3 +95,61 @@ class QRCodeLinkViewSet(viewsets.ModelViewSet):
                 "scans": qr_link.scans,
             }
         )
+
+
+@api_view(["GET"])
+def poi_proxy(request):
+    """Proxy для Overpass API, чтобы избежать CORS на фронте."""
+    lat = request.query_params.get("lat", "54.6292")
+    lon = request.query_params.get("lon", "39.7351")
+    radius = request.query_params.get("radius", "5000")
+
+    query = (
+        "[out:json][timeout:25];\n"
+        "(\n"
+        f'  node["tourism"="attraction"](around:{radius},{lat},{lon});\n'
+        f'  node["tourism"="museum"](around:{radius},{lat},{lon});\n'
+        f'  node["historic"="monument"](around:{radius},{lat},{lon});\n'
+        f'  node["historic"="memorial"](around:{radius},{lat},{lon});\n'
+        ");\n"
+        "out body 60;\n"
+    )
+
+    fallback = {
+        "elements": [
+            {
+                "type": "node",
+                "id": 1,
+                "lat": 54.6348,
+                "lon": 39.7486,
+                "tags": {"name": "Рязанский Кремль", "historic": "monument"},
+            },
+            {
+                "type": "node",
+                "id": 2,
+                "lat": 54.636,
+                "lon": 39.747,
+                "tags": {"name": "Памятник Есенину", "historic": "monument"},
+            },
+            {
+                "type": "node",
+                "id": 3,
+                "lat": 54.6288,
+                "lon": 39.7345,
+                "tags": {"name": "Грибы с глазами", "tourism": "attraction"},
+            },
+        ]
+    }
+
+    try:
+        req = urllib.request.Request(
+            "https://overpass-api.de/api/interpreter",
+            data=query.encode("utf-8"),
+            headers={"Content-Type": "text/plain"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = resp.read()
+        return HttpResponse(data, content_type="application/json")
+    except Exception:
+        return JsonResponse(fallback)
