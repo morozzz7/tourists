@@ -341,6 +341,57 @@ h1 {
   border-color: rgba(255, 255, 255, 0.1);
 }
 
+:root[data-theme='dark'] .map-shell {
+  background: #191510;
+  border-color: var(--border-soft);
+}
+
+:root[data-theme='dark'] .map-frame {
+  background: #15110c;
+}
+
+:root[data-theme='dark'] .map-legend {
+  background: rgba(20, 18, 15, 0.9);
+  color: var(--text-strong);
+  border: 1px solid var(--border-soft);
+}
+
+:root[data-theme='dark'] .map-provider-warning {
+  background: rgba(20, 18, 15, 0.9);
+  color: var(--text-strong);
+  border-color: var(--border-soft);
+}
+
+:root[data-theme='dark'] .sidebar-note {
+  background: linear-gradient(140deg, #2a2218, #1e1812);
+  color: var(--text-strong);
+  border-color: var(--border-soft);
+}
+
+:root[data-theme='dark'] .mascot {
+  background: linear-gradient(160deg, #2b241c, #1a1510);
+  border-color: var(--border-soft);
+}
+
+:root[data-theme='dark'] .mascot-name {
+  color: var(--text-muted);
+}
+
+:root[data-theme='dark'] .card {
+  background: linear-gradient(145deg, rgba(32, 26, 20, 0.95), rgba(24, 20, 16, 0.95));
+  border-color: var(--border-soft);
+}
+
+:root[data-theme='dark'] .leaflet-popup-content-wrapper,
+:root[data-theme='dark'] .leaflet-popup-tip {
+  background: var(--surface);
+  color: var(--text-strong);
+}
+
+:root[data-theme='dark'] .leaflet-popup-close-button {
+  color: var(--text-muted);
+}
+
 .map-overlay-title {
   margin: 0 0 8px;
   font-size: 11px;
@@ -454,6 +505,19 @@ h1 {
   margin: 0 0 8px;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.map-popup-link {
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-strong);
+  text-decoration: none;
+  margin-bottom: 8px;
+}
+
+.map-popup-link:hover {
+  text-decoration: underline;
 }
 
 .link-map {
@@ -596,6 +660,11 @@ h1 {
   border-radius: 16px;
   padding: 16px;
   border: 1px solid rgba(69, 99, 116, 0.18);
+}
+
+:root[data-theme='dark'] .faq article {
+  background: rgba(24, 20, 16, 0.95);
+  border-color: var(--border-soft);
 }
 
 .faq h3 {
@@ -762,6 +831,29 @@ h1 {
   color: var(--text-strong);
 }
 
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.modal-switch {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.modal-switch .ghost {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.modal-switch .ghost.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
 .modal-subtitle {
   margin: 0 0 16px;
   color: var(--text-muted);
@@ -785,6 +877,12 @@ h1 {
   margin: 4px 0 0;
   font-size: 12px;
   color: var(--accent-strong);
+}
+
+.modal-error {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #c5352a;
 }
 
 .checkbox {

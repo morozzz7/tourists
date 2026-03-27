@@ -7,6 +7,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
+from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
+from django.contrib.auth.models import User
+from django.middleware.csrf import get_token
 import qrcode
 from io import BytesIO
 import base64
@@ -153,3 +156,83 @@ def poi_proxy(request):
         return HttpResponse(data, content_type="application/json")
     except Exception:
         return JsonResponse(fallback)
+
+
+@api_view(["GET"])
+def csrf(request):
+    """Выдает CSRF токен и ставит cookie."""
+    return Response({"csrfToken": get_token(request)})
+
+
+@api_view(["POST"])
+def register(request):
+    """Регистрация пользователя с логином по email."""
+    name = (request.data.get("name") or "").strip()
+    email = (request.data.get("email") or "").strip().lower()
+    password = (request.data.get("password") or "").strip()
+
+    if not email or not password:
+        return Response({"error": "Email и пароль обязательны."}, status=400)
+
+    if User.objects.filter(username=email).exists():
+        return Response({"error": "Пользователь уже существует."}, status=400)
+
+    user = User.objects.create_user(
+        username=email,
+        email=email,
+        password=password,
+        first_name=name,
+    )
+    auth_login(request, user)
+    return Response(
+        {
+            "id": user.id,
+            "name": user.first_name,
+            "email": user.email,
+        }
+    )
+
+
+@api_view(["POST"])
+def login(request):
+    """Вход по email и паролю."""
+    email = (request.data.get("email") or "").strip().lower()
+    password = (request.data.get("password") or "").strip()
+
+    if not email or not password:
+        return Response({"error": "Email и пароль обязательны."}, status=400)
+
+    user = authenticate(request, username=email, password=password)
+    if user is None:
+        return Response({"error": "Неверные учетные данные."}, status=400)
+
+    auth_login(request, user)
+    return Response(
+        {
+            "id": user.id,
+            "name": user.first_name,
+            "email": user.email,
+        }
+    )
+
+
+@api_view(["POST"])
+def logout(request):
+    """Выход."""
+    auth_logout(request)
+    return Response({"ok": True})
+
+
+@api_view(["GET"])
+def me(request):
+    """Текущий пользователь."""
+    if not request.user.is_authenticated:
+        return Response({"authenticated": False}, status=200)
+    return Response(
+        {
+            "authenticated": True,
+            "id": request.user.id,
+            "name": request.user.first_name,
+            "email": request.user.email,
+        }
+    )

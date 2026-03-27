@@ -6,9 +6,12 @@ import L from 'leaflet'
 // Fix for default marker icons in Leaflet + React
 delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconRetinaUrl: '/mushroom.png',
+  iconUrl: '/mushroom.png',
+  iconSize: [36, 36],
+  iconAnchor: [18, 34],
+  popupAnchor: [0, -32],
+  shadowUrl: undefined,
 })
 
 const RYAZAN_CENTER = [54.6292, 39.7351]
@@ -217,6 +220,7 @@ const RyazanMap = ({ onSelectPoi }) => {
   const [error, setError] = useState(null)
   const [provider, setProvider] = useState('leaflet')
   const [wikiById, setWikiById] = useState({})
+  const [yandexReady, setYandexReady] = useState(false)
   const yandexContainerRef = useRef(null)
   const yandexMapRef = useRef(null)
 
@@ -367,6 +371,7 @@ const RyazanMap = ({ onSelectPoi }) => {
               suppressMapOpenBlock: true,
             },
           )
+          setYandexReady(true)
         })
       })
       .catch(() => {
@@ -379,11 +384,13 @@ const RyazanMap = ({ onSelectPoi }) => {
         yandexMapRef.current.destroy()
         yandexMapRef.current = null
       }
+      setYandexReady(false)
     }
   }, [provider])
 
   useEffect(() => {
     if (provider !== 'yandex') return
+    if (!yandexReady) return
     const map = yandexMapRef.current
     if (!map) return
 
@@ -424,12 +431,17 @@ const RyazanMap = ({ onSelectPoi }) => {
         {
           balloonContent: `<strong>${title}</strong><br/>${desc}${link}`,
         },
-        { preset: 'islands#redIcon' },
+        {
+          iconLayout: 'default#image',
+          iconImageHref: '/mushroom.ico',
+          iconImageSize: [36, 36],
+          iconImageOffset: [-18, -34],
+        },
       )
       placemark.events.add('click', () => onSelectPoi?.(loc))
       map.geoObjects.add(placemark)
     })
-  }, [provider, locations, captured, onSelectPoi, wikiById])
+  }, [provider, yandexReady, locations, captured, onSelectPoi, wikiById])
 
   const toggleCapture = (id) => {
     setCaptured((prev) => {
@@ -473,26 +485,26 @@ const RyazanMap = ({ onSelectPoi }) => {
             />
           ))}
           {locations.map((loc) => (
-          <Marker key={loc.id} position={loc.coords}>
-            <Popup className="custom-popup">
-              <div className="map-popup">
-                <h3>{wikiById[loc.id]?.title || loc.name}</h3>
-                <p>{wikiById[loc.id]?.extract || 'Описание не найдено'}</p>
-                {wikiById[loc.id]?.url && (
-                  <a
-                    className="map-popup-link"
-                    href={wikiById[loc.id].url}
-                    target="_blank"
-                    rel="noreferrer"
+            <Marker key={loc.id} position={loc.coords}>
+              <Popup className="custom-popup">
+                <div className="map-popup">
+                  <h3>{wikiById[loc.id]?.title || loc.name}</h3>
+                  <p>{wikiById[loc.id]?.extract || 'Описание не найдено'}</p>
+                  {wikiById[loc.id]?.url && (
+                    <a
+                      className="map-popup-link"
+                      href={wikiById[loc.id].url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Статья
+                    </a>
+                  )}
+                  <button
+                    className="map-popup-btn"
+                    onClick={() => onSelectPoi?.(loc)}
                   >
-                    Статья
-                  </a>
-                )}
-                <button
-                  className="map-popup-btn"
-                  onClick={() => onSelectPoi?.(loc)}
-                >
-                  Открыть карточку
+                    Открыть карточку
                   </button>
                 </div>
               </Popup>

@@ -13,6 +13,19 @@ const demoMessages = [
   },
 ]
 
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
+
+const getCookie = (name) => {
+  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'))
+  return match ? decodeURIComponent(match[2]) : null
+}
+
+const ensureCsrf = async () => {
+  await fetch(`${API_BASE}/api/auth/csrf/`, {
+    credentials: 'include',
+  })
+}
+
 const PageShell = ({ title, subtitle, children }) => (
   <div className="page page-standalone">
     <header>
@@ -52,88 +65,101 @@ const Home = ({
   theme,
   sidebarOpen,
   onToggleSidebar,
+  user,
+  onLogout,
 }) => {
   const navigate = useNavigate()
   return (
     <div className={`app ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
-    <aside className="sidebar">
-      <button className="sidebar-toggle" onClick={onToggleSidebar}>
-        {sidebarOpen ? 'Свернуть' : 'Меню'}
-      </button>
-      <div className="account">
-        <div className="avatar" aria-hidden="true"></div>
-        <div className="account-info">
-          <p className="account-title">Гость</p>
-          <p className="account-subtitle">Рязань, на старте</p>
-        </div>
-      </div>
-      <nav className="menu">
-        <Link to="/routes">Экскурсии и квесты</Link>
-        <Link to="/kids">Детский аудиогид</Link>
-        <Link to="/achievements">Достижения</Link>
-        <Link to="/rewards">Награды</Link>
-        <Link to="/loyalty">Система лояльности</Link>
-        <Link to="/faq">Часто задаваемые вопросы</Link>
-        <Link to="/profile">Личный кабинет</Link>
-      </nav>
-      <div className="auth-actions">
-        <button className="primary" onClick={() => onOpenModal('register')}>
-          Регистрация
+      <aside className="sidebar">
+        <button className="sidebar-toggle" onClick={onToggleSidebar}>
+          {sidebarOpen ? 'Свернуть' : 'Меню'}
         </button>
-        <button className="ghost" onClick={() => onOpenModal('register')}>
-          Войти
-        </button>
-      </div>
-      <div className="sidebar-note">
-        <p className="note-title">Найди свой маршрут</p>
-        <p className="note-text">
-          Собери первые 300 баллов за прогулку по центру и открой сезонные
-          трофеи.
-        </p>
-      </div>
-      <Link className="ghost link-map" to="/map">
-        Открыть большую карту
-      </Link>
-      <Link className="ghost link-map" to="/admin/qr">
-        QR-админ
-      </Link>
-      <button className="theme-toggle" onClick={onToggleTheme}>
-        {theme === 'light' ? 'Темная тема' : 'Светлая тема'}
-      </button>
-    </aside>
-
-    <main className="main">
-      <section id="home" className="hero">
-        <div className="map-wrap">
-          <div className="map-header">
-            <div>
-              <p className="eyebrow">Геймификация туризма 2026</p>
-              <h1>Рязань как игра: маршруты, квесты, достижения</h1>
-              <p className="lead">
-                Исследуй Рязанскую область через QR-квесты, интерактивную карту
-                и реальные награды.
-              </p>
-            </div>
-            <div className="register-card">
-              <p className="register-title">Войти или создать профиль</p>
-              <p className="register-subtitle">
-                Кнопки регистрации находятся в блоке личного кабинета слева.
-              </p>
-            </div>
+        <div className="account">
+          <div className="avatar" aria-hidden="true"></div>
+          <div className="account-info">
+            <p className="account-title">{user?.name || user?.email || 'Гость'}</p>
+            <p className="account-subtitle">
+              {user ? 'Профиль активен' : 'Рязань, на старте'}
+            </p>
           </div>
-
-          <div className="map-shell">
-            <button className="map-full-btn" onClick={() => navigate('/map')}>
-              На весь экран
+        </div>
+        <nav className="menu">
+          <Link to="/routes">Экскурсии и квесты</Link>
+          <Link to="/kids">Детский аудиогид</Link>
+          <Link to="/achievements">Достижения</Link>
+          <Link to="/rewards">Награды</Link>
+          <Link to="/loyalty">Система лояльности</Link>
+          <Link to="/faq">Часто задаваемые вопросы</Link>
+          <Link to="/profile">Личный кабинет</Link>
+        </nav>
+        <div className="auth-actions">
+          {!user && (
+            <>
+              <button className="primary" onClick={() => onOpenModal('register')}>
+                Регистрация
+              </button>
+              <button className="ghost" onClick={() => onOpenModal('register')}>
+                Войти
+              </button>
+            </>
+          )}
+          {user && (
+            <button className="ghost" onClick={onLogout}>
+              Выйти
             </button>
-            <RyazanMap onSelectPoi={onSelectPoi} />
-            <div className="map-mask" aria-hidden="true"></div>
-            <div className="map-legend">
-              <span className="legend-dot"></span>
-              <p>Рязанская область в фокусе</p>
+          )}
+        </div>
+        <div className="sidebar-note">
+          <p className="note-title">Найди свой маршрут</p>
+          <p className="note-text">
+            Собери первые 300 баллов за прогулку по центру и открой сезонные
+            трофеи.
+          </p>
+        </div>
+        <Link className="ghost link-map" to="/map">
+          Открыть большую карту
+        </Link>
+        <Link className="ghost link-map" to="/admin/qr">
+          QR-админ
+        </Link>
+        <button className="theme-toggle" onClick={onToggleTheme}>
+          {theme === 'light' ? 'Темная тема' : 'Светлая тема'}
+        </button>
+      </aside>
+
+      <main className="main">
+        <section id="home" className="hero">
+          <div className="map-wrap">
+            <div className="map-header">
+              <div>
+                <p className="eyebrow">Геймификация туризма 2026</p>
+                <h1>Рязань - территория открытий</h1>
+                <p className="lead">
+                  Исследуй Рязанскую область через QR-квесты, интерактивную карту
+                  и реальные награды.
+                </p>
+              </div>
+              <div className="register-card">
+                <p className="register-title">Войти или создать профиль</p>
+                <p className="register-subtitle">
+                  Кнопки регистрации находятся в блоке личного кабинета слева.
+                </p>
+              </div>
+            </div>
+
+            <div className="map-shell">
+              <button className="map-full-btn" onClick={() => navigate('/map')}>
+                На весь экран
+              </button>
+              <RyazanMap onSelectPoi={onSelectPoi} />
+              <div className="map-mask" aria-hidden="true"></div>
+              <div className="map-legend">
+                <span className="legend-dot"></span>
+                <p>Рязанская область в фокусе</p>
+              </div>
             </div>
           </div>
-        </div>
 
           <div className="mascot-panel">
             <div className="speech">
@@ -142,159 +168,159 @@ const Home = ({
                 Хочешь узнать больше о Рязани и Рязанской области? Пройди
                 небольшую анкету, чтобы я знал, что тебе нравится.
               </p>
-            <button className="primary" onClick={() => onOpenModal('legend')}>
-              Легенда помощника
-            </button>
+              <button className="primary" onClick={() => onOpenModal('legend')}>
+                Легенда помощника
+              </button>
             </div>
-          <div
-            className="mascot"
-            role="button"
-            tabIndex={0}
-            onClick={() => onOpenModal('legend')}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') onOpenModal('legend')
-            }}
-          >
-            <img src={mascotImg} alt="Буба" />
-            <p className="mascot-name">Буба, проводник по Рязани</p>
+            <div
+              className="mascot"
+              role="button"
+              tabIndex={0}
+              onClick={() => onOpenModal('legend')}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') onOpenModal('legend')
+              }}
+            >
+              <img src={mascotImg} alt="Буба" />
+              <p className="mascot-name">Буба, проводник по Рязани</p>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section id="routes" className="page">
-        <header>
-          <p className="eyebrow">Экскурсии и квесты</p>
-          <h2>Лента маршрутов</h2>
-          <p>
-            Список приключений с QR-точками, тайниками и сюжетными линиями.
-            Пока пусто, но место уже готово для карточек маршрутов.
-          </p>
-        </header>
-        <div className="cards">
-          {['Исторический центр', 'Квест по музеям', 'Природные тропы'].map(
-            (title) => (
+        <section id="routes" className="page">
+          <header>
+            <p className="eyebrow">Экскурсии и квесты</p>
+            <h2>Лента маршрутов</h2>
+            <p>
+              Список приключений с QR-точками, тайниками и сюжетными линиями.
+              Пока пусто, но место уже готово для карточек маршрутов.
+            </p>
+          </header>
+          <div className="cards">
+            {['Исторический центр', 'Квест по музеям', 'Природные тропы'].map(
+              (title) => (
+                <article key={title} className="card">
+                  <h3>{title}</h3>
+                  <p>Описание маршрута появится здесь.</p>
+                  <div className="card-tags">
+                    <span>QR</span>
+                    <span>60–90 мин</span>
+                  </div>
+                </article>
+              ),
+            )}
+          </div>
+        </section>
+
+        <section id="kids" className="page">
+          <header>
+            <p className="eyebrow">Персонажи для детей</p>
+            <h2>Сказочный аудиогид</h2>
+            <p>
+              Для семей с детьми: персонаж ведет ребенка по короткому пешему
+              маршруту, рассказывает истории в игровой форме и предлагает
+              простые задания с QR-сканированием.
+            </p>
+          </header>
+          <div className="cards">
+            <article className="card">
+              <h3>Маршрут для малышей</h3>
+              <p>6 точек в пешей доступности, 30–40 минут.</p>
+              <div className="card-tags">
+                <span>Аудиогид</span>
+                <span>QR</span>
+              </div>
+            </article>
+            <article className="card">
+              <h3>Мини‑тест в конце</h3>
+              <p>3 вопроса по маршруту, +50 баллов.</p>
+              <div className="card-tags">
+                <span>Игра</span>
+                <span>Баллы</span>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="achievements" className="page">
+          <header>
+            <p className="eyebrow">Достижения</p>
+            <h2>Коллекция наград</h2>
+            <p>
+              Раздел для медалей, серий посещений и особых статусов — пока
+              макет.
+            </p>
+          </header>
+          <div className="cards achievements">
+            {['Первооткрыватель', 'Ночной исследователь', 'Летописец'].map(
+              (title) => (
+                <article key={title} className="card">
+                  <h3>{title}</h3>
+                  <p>Условие получения появится здесь.</p>
+                </article>
+              ),
+            )}
+          </div>
+        </section>
+
+        <section id="rewards" className="page">
+          <header>
+            <p className="eyebrow">Награды</p>
+            <h2>Баллы и призы</h2>
+            <p>Баллы за коды, маршруты и тесты можно обменять на скидки и подарки.</p>
+          </header>
+          <div className="cards">
+            {['Кофе и выпечка', 'Прокат велосипедов', 'Сувениры'].map((title) => (
               <article key={title} className="card">
                 <h3>{title}</h3>
-                <p>Описание маршрута появится здесь.</p>
-                <div className="card-tags">
-                  <span>QR</span>
-                  <span>60–90 мин</span>
-                </div>
+                <p>Партнерские предложения появятся здесь.</p>
               </article>
-            ),
-          )}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
 
-      <section id="kids" className="page">
-        <header>
-          <p className="eyebrow">Персонажи для детей</p>
-          <h2>Сказочный аудиогид</h2>
-          <p>
-            Для семей с детьми: персонаж ведет ребенка по короткому пешему
-            маршруту, рассказывает истории в игровой форме и предлагает
-            простые задания с QR-сканированием.
-          </p>
-        </header>
-        <div className="cards">
-          <article className="card">
-            <h3>Маршрут для малышей</h3>
-            <p>6 точек в пешей доступности, 30–40 минут.</p>
-            <div className="card-tags">
-              <span>Аудиогид</span>
-              <span>QR</span>
-            </div>
-          </article>
-          <article className="card">
-            <h3>Мини‑тест в конце</h3>
-            <p>3 вопроса по маршруту, +50 баллов.</p>
-            <div className="card-tags">
-              <span>Игра</span>
-              <span>Баллы</span>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <section id="achievements" className="page">
-        <header>
-          <p className="eyebrow">Достижения</p>
-          <h2>Коллекция наград</h2>
-          <p>
-            Раздел для медалей, серий посещений и особых статусов — пока
-            макет.
-          </p>
-        </header>
-        <div className="cards achievements">
-          {['Первооткрыватель', 'Ночной исследователь', 'Летописец'].map(
-            (title) => (
+        <section id="loyalty" className="page">
+          <header>
+            <p className="eyebrow">Система лояльности</p>
+            <h2>Статус туриста</h2>
+            <p>Чем больше открытых точек, тем выше статус и больше бонусов.</p>
+          </header>
+          <div className="cards">
+            {['Новичок', 'Исследователь', 'Амбассадор'].map((title) => (
               <article key={title} className="card">
                 <h3>{title}</h3>
-                <p>Условие получения появится здесь.</p>
+                <p>Условия и бонусы уровня появятся здесь.</p>
               </article>
-            ),
-          )}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
 
-      <section id="rewards" className="page">
-        <header>
-          <p className="eyebrow">Награды</p>
-          <h2>Баллы и призы</h2>
-          <p>Баллы за коды, маршруты и тесты можно обменять на скидки и подарки.</p>
-        </header>
-        <div className="cards">
-          {['Кофе и выпечка', 'Прокат велосипедов', 'Сувениры'].map((title) => (
-            <article key={title} className="card">
-              <h3>{title}</h3>
-              <p>Партнерские предложения появятся здесь.</p>
+        <section id="faq" className="page">
+          <header>
+            <p className="eyebrow">FAQ</p>
+            <h2>Часто задаваемые вопросы</h2>
+            <p>
+              Готовый блок для вопросов: как начисляются баллы, где получать
+              награды, как работает QR-сканер.
+            </p>
+          </header>
+          <div className="faq">
+            <article>
+              <h3>Как начисляются баллы?</h3>
+              <p>Ответ появится после заполнения базы маршрутов.</p>
             </article>
-          ))}
-        </div>
-      </section>
-
-      <section id="loyalty" className="page">
-        <header>
-          <p className="eyebrow">Система лояльности</p>
-          <h2>Статус туриста</h2>
-          <p>Чем больше открытых точек, тем выше статус и больше бонусов.</p>
-        </header>
-        <div className="cards">
-          {['Новичок', 'Исследователь', 'Амбассадор'].map((title) => (
-            <article key={title} className="card">
-              <h3>{title}</h3>
-              <p>Условия и бонусы уровня появятся здесь.</p>
+            <article>
+              <h3>Можно ли проходить маршруты без гида?</h3>
+              <p>Да, будут доступны самостоятельные и групповые форматы.</p>
             </article>
-          ))}
-        </div>
-      </section>
-
-      <section id="faq" className="page">
-        <header>
-          <p className="eyebrow">FAQ</p>
-          <h2>Часто задаваемые вопросы</h2>
-          <p>
-            Готовый блок для вопросов: как начисляются баллы, где получать
-            награды, как работает QR-сканер.
-          </p>
-        </header>
-        <div className="faq">
-          <article>
-            <h3>Как начисляются баллы?</h3>
-            <p>Ответ появится после заполнения базы маршрутов.</p>
-          </article>
-          <article>
-            <h3>Можно ли проходить маршруты без гида?</h3>
-            <p>Да, будут доступны самостоятельные и групповые форматы.</p>
-          </article>
-          <article>
-            <h3>Где получить призы?</h3>
-            <p>Список партнеров появится в разделе лояльности.</p>
-          </article>
-        </div>
-      </section>
-    </main>
-  </div>
+            <article>
+              <h3>Где получить призы?</h3>
+              <p>Список партнеров появится в разделе лояльности.</p>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
   )
 }
 
@@ -307,7 +333,12 @@ function App() {
   const [selectedPoi, setSelectedPoi] = useState(null)
   const [poiSummary, setPoiSummary] = useState(null)
   const [profile, setProfile] = useState({ name: '', email: '' })
-  const [registerStatus, setRegisterStatus] = useState(null)
+  const [authMode, setAuthMode] = useState('register')
+  const [authStatus, setAuthStatus] = useState(null)
+  const [authError, setAuthError] = useState(null)
+  const [authLoading, setAuthLoading] = useState(false)
+  const [password, setPassword] = useState('')
+  const [user, setUser] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
   useEffect(() => {
@@ -318,6 +349,25 @@ function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme
   }, [theme])
+
+  useEffect(() => {
+    const fetchMe = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/auth/me/`, {
+          credentials: 'include',
+        })
+        if (!response.ok) return
+        const data = await response.json()
+        if (data.authenticated) {
+          setUser({ name: data.name, email: data.email })
+          setProfile({ name: data.name || '', email: data.email || '' })
+        }
+      } catch {
+        // ignore
+      }
+    }
+    fetchMe()
+  }, [])
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))
@@ -368,13 +418,70 @@ function App() {
 
   const openModal = (type) => {
     setModalType(type)
-    setRegisterStatus(null)
+    setAuthStatus(null)
+    setAuthError(null)
   }
 
   const closeModal = () => {
     setModalType(null)
     setSelectedPoi(null)
-    setRegisterStatus(null)
+    setAuthStatus(null)
+    setAuthError(null)
+  }
+
+  const handleAuth = async () => {
+    setAuthLoading(true)
+    setAuthError(null)
+    setAuthStatus(null)
+    try {
+      await ensureCsrf()
+      const csrf = getCookie('csrftoken')
+      const payload =
+        authMode === 'register'
+          ? { name: profile.name, email: profile.email, password }
+          : { email: profile.email, password }
+      const response = await fetch(
+        `${API_BASE}/api/auth/${authMode === 'register' ? 'register' : 'login'}/`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrf || '',
+          },
+          body: JSON.stringify(payload),
+        },
+      )
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data?.error || 'Ошибка авторизации')
+      }
+      setUser({ name: data.name, email: data.email })
+      setAuthStatus(authMode === 'register' ? 'Аккаунт создан.' : 'Вход выполнен.')
+      setPassword('')
+    } catch (err) {
+      setAuthError(err.message)
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      await ensureCsrf()
+      const csrf = getCookie('csrftoken')
+      await fetch(`${API_BASE}/api/auth/logout/`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'X-CSRFToken': csrf || '',
+        },
+      })
+      setUser(null)
+      setProfile({ name: '', email: '' })
+    } catch {
+      // ignore
+    }
   }
 
   const handleSelectPoi = (poi) => {
@@ -395,6 +502,8 @@ function App() {
               theme={theme}
               sidebarOpen={sidebarOpen}
               onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+              user={user}
+              onLogout={handleLogout}
             />
           }
         />
@@ -562,19 +671,41 @@ function App() {
 
             {modalType === 'register' && (
               <div className="modal-body">
-                <h3>Регистрация</h3>
+                <div className="modal-head">
+                  <h3>{authMode === 'register' ? 'Регистрация' : 'Вход'}</h3>
+                  <div className="modal-switch">
+                    <button
+                      className={`ghost ${authMode === 'register' ? 'active' : ''}`}
+                      type="button"
+                      onClick={() => setAuthMode('register')}
+                    >
+                      Регистрация
+                    </button>
+                    <button
+                      className={`ghost ${authMode === 'login' ? 'active' : ''}`}
+                      type="button"
+                      onClick={() => setAuthMode('login')}
+                    >
+                      Вход
+                    </button>
+                  </div>
+                </div>
                 <p className="modal-subtitle">
-                  Создай профиль, чтобы сохранять прогресс и баллы.
+                  {authMode === 'register'
+                    ? 'Создай профиль, чтобы сохранять прогресс и баллы.'
+                    : 'Войди, чтобы продолжить путешествие.'}
                 </p>
                 <form className="modal-form">
-                  <input
-                    type="text"
-                    placeholder="Имя"
-                    value={profile.name}
-                    onChange={(event) =>
-                      setProfile((prev) => ({ ...prev, name: event.target.value }))
-                    }
-                  />
+                  {authMode === 'register' && (
+                    <input
+                      type="text"
+                      placeholder="Имя"
+                      value={profile.name}
+                      onChange={(event) =>
+                        setProfile((prev) => ({ ...prev, name: event.target.value }))
+                      }
+                    />
+                  )}
                   <input
                     type="email"
                     placeholder="Email"
@@ -583,17 +714,26 @@ function App() {
                       setProfile((prev) => ({ ...prev, email: event.target.value }))
                     }
                   />
-                  <input type="password" placeholder="Пароль" />
+                  <input
+                    type="password"
+                    placeholder="Пароль"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                  />
                   <button
                     className="primary"
                     type="button"
-                    onClick={() => setRegisterStatus('ok')}
+                    onClick={handleAuth}
+                    disabled={authLoading}
                   >
-                    Создать аккаунт
+                    {authLoading
+                      ? 'Подождите...'
+                      : authMode === 'register'
+                        ? 'Создать аккаунт'
+                        : 'Войти'}
                   </button>
-                  {registerStatus === 'ok' && (
-                    <p className="modal-success">Профиль создан локально.</p>
-                  )}
+                  {authStatus && <p className="modal-success">{authStatus}</p>}
+                  {authError && <p className="modal-error">{authError}</p>}
                 </form>
               </div>
             )}
