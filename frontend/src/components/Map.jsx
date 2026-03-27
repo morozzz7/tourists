@@ -1,24 +1,45 @@
-import React, { useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Rectangle } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
+import React, { useEffect, useState } from 'react'
+import { MapContainer, TileLayer, Marker, Popup, Rectangle } from 'react-leaflet'
+import 'leaflet/dist/leaflet.css'
+import L from 'leaflet'
 
 // Fix for default marker icons in Leaflet + React
-delete L.Icon.Default.prototype._getIconUrl;
+delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
+})
 
-const RyazanMap = () => {
-  const ryazanCenter = [54.6292, 39.7351]; // Ryazan center coordinates
+const RyazanMap = ({ onSelectPoi }) => {
+  const ryazanCenter = [54.6292, 39.7351]
+  const [locations, setLocations] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  const locations = [
-    { id: 1, name: 'Рязанский Кремль', coords: [54.6348, 39.7486], discovered: true },
-    { id: 2, name: 'Памятник Есенину', coords: [54.6360, 39.7470], discovered: false },
-    { id: 3, name: 'Грибы с глазами', coords: [54.6288, 39.7345], discovered: true },
-  ];
+  const fallbackLocations = [
+    {
+      id: 'fallback-1',
+      name: 'Рязанский Кремль',
+      category: 'attraction',
+      coords: [54.6348, 39.7486],
+      tags: {},
+    },
+    {
+      id: 'fallback-2',
+      name: 'Памятник Есенину',
+      category: 'monument',
+      coords: [54.636, 39.747],
+      tags: {},
+    },
+    {
+      id: 'fallback-3',
+      name: 'Грибы с глазами',
+      category: 'art',
+      coords: [54.6288, 39.7345],
+      tags: {},
+    },
+  ]
 
   const territories = [
     { id: 't1', name: 'Кремль', bounds: [[54.633, 39.742], [54.638, 39.752]] },
@@ -27,22 +48,100 @@ const RyazanMap = () => {
     { id: 't4', name: 'ЦПКиО', bounds: [[54.624, 39.742], [54.629, 39.751]] },
     { id: 't5', name: 'Музейный квартал', bounds: [[54.631, 39.752], [54.636, 39.760]] },
     { id: 't6', name: 'Лыбедский бульвар', bounds: [[54.626, 39.724], [54.632, 39.733]] },
-  ];
+  ]
 
-  const [captured, setCaptured] = useState(new Set(['t1', 't3']));
-  const progress = Math.round((captured.size / territories.length) * 100);
+  const [captured, setCaptured] = useState(new Set(['t1', 't3']))
+  const progress = Math.round((captured.size / territories.length) * 100)
+
+  useEffect(() => {
+    const fetchPoi = async () => {
+      try {
+        setLoading(true)
+        const query =
+          '[out:json][timeout:25];\n' +
+          '(\n' +
+          '  node["tourism"="attraction"](around:5000,' +
+          ryazanCenter[0] +
+          ',' +
+          ryazanCenter[1] +
+          ');\n' +
+          '  node["tourism"="museum"](around:5000,' +
+          ryazanCenter[0] +
+          ',' +
+          ryazanCenter[1] +
+          ');\n' +
+          '  node["historic"="monument"](around:5000,' +
+          ryazanCenter[0] +
+          ',' +
+          ryazanCenter[1] +
+          ');\n' +
+          '  node["historic"="memorial"](around:5000,' +
+          ryazanCenter[0] +
+          ',' +
+          ryazanCenter[1] +
+          ');\n' +
+          ');\n' +
+          'out body 60;\n'
+        const response = await fetch('https://overpass-api.de/api/interpreter', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: query,
+        })
+        if (response.ok === false) throw new Error('Overpass error')
+        const data = await response.json()
+        const normalized = (data.elements || [])
+          .filter((el) => el.type === 'node')
+          .map((el) => {
+            const name =
+              el.tags?.name ||
+              el.tags?.['name:ru'] ||
+              el.tags?.['name:en'] ||
+              'Точка интереса'
+            const category =
+              el.tags?.tourism ||
+              el.tags?.historic ||
+              el.tags?.amenity ||
+              'poi'
+            return {
+              id: el.id,
+              name,
+              category,
+              coords: [el.lat, el.lon],
+              tags: el.tags || {},
+            }
+          })
+          .slice(0, 40)
+        if (normalized.length === 0) {
+          setLocations(fallbackLocations)
+          setError('Точки из API не найдены, показаны демо-локации')
+        } else {
+          setLocations(normalized)
+          setError(null)
+        }
+      } catch (err) {
+        setLocations(fallbackLocations)
+        setError('Не удалось загрузить точки интереса, показаны демо-локации')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchPoi()
+  }, [ryazanCenter])
 
   const toggleCapture = (id) => {
     setCaptured((prev) => {
-      const next = new Set(prev);
+      const next = new Set(prev)
       if (next.has(id)) {
-        next.delete(id);
+        next.delete(id)
       } else {
-        next.add(id);
+        next.add(id)
       }
-      return next;
-    });
-  };
+      return next
+    })
+  }
+
+  const progressStyle = { width: progress + '%' }
 
   return (
     <div className="map-frame">
@@ -56,8 +155,8 @@ const RyazanMap = () => {
             key={territory.id}
             bounds={territory.bounds}
             pathOptions={{
-              color: captured.has(territory.id) ? '#8D8741' : '#999999',
-              fillColor: captured.has(territory.id) ? '#8D8741' : '#cccccc',
+              color: captured.has(territory.id) ? '#d62f2f' : '#999999',
+              fillColor: captured.has(territory.id) ? '#d62f2f' : '#cccccc',
               fillOpacity: captured.has(territory.id) ? 0.35 : 0.15,
               weight: 2,
             }}
@@ -67,16 +166,16 @@ const RyazanMap = () => {
           />
         ))}
         {locations.map((loc) => (
-          <Marker 
-            key={loc.id} 
-            position={loc.coords}
-          >
+          <Marker key={loc.id} position={loc.coords}>
             <Popup className="custom-popup">
-              <div className="p-2">
-                <h3 className="font-bold text-accent">{loc.name}</h3>
-                <p className="text-xs mb-2">{loc.discovered ? 'Локация открыта! ✅' : 'Найдите QR-код, чтобы открыть локацию'}</p>
-                <button className="bg-accent text-white px-3 py-1 rounded-lg text-[10px] font-bold">
-                  Подробнее
+              <div className="map-popup">
+                <h3>{loc.name}</h3>
+                <p>Категория: {loc.category}</p>
+                <button
+                  className="map-popup-btn"
+                  onClick={() => onSelectPoi?.(loc)}
+                >
+                  Открыть карточку
                 </button>
               </div>
             </Popup>
@@ -91,14 +190,16 @@ const RyazanMap = () => {
           <span className="map-overlay-accent">{progress}%</span>
         </div>
         <div className="map-progress">
-          <div className="map-progress-fill" style={{ width: `${progress}%` }}></div>
+          <div className="map-progress-fill" style={progressStyle}></div>
         </div>
         <p className="map-overlay-note">
           Нажми на участок карты, чтобы отметить его как исследованный.
         </p>
+        {loading && <p className="map-overlay-status">Загрузка точек...</p>}
+        {error && <p className="map-overlay-status">{error}</p>}
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default RyazanMap;
+export default RyazanMap

@@ -1,44 +1,53 @@
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=Unbounded:wght@500;700&display=swap');
 
 :root {
-  --bg: #FBEEC1;
-  --bg-grad: linear-gradient(135deg, #FBEEC1 0%, #DAAD86 100%);
+  --bg: #ffffff;
+  --bg-grad:
+    radial-gradient(circle at 10% 10%, rgba(255, 230, 230, 0.35), transparent 40%),
+    radial-gradient(circle at 90% 20%, rgba(255, 244, 214, 0.35), transparent 45%),
+    linear-gradient(140deg, #ffffff 0%, #ffffff 70%, #fff8f0 100%);
   --surface: #ffffff;
-  --surface-strong: #BC986A;
-  --text: #3E3B30;
-  --text-strong: #1A1915;
-  --text-muted: #7E7866;
-  --accent: #8D8741;
-  --accent-strong: #6D6832;
-  --accent-soft: #DAAD86;
-  --secondary: #659DBD;
-  --border-soft: rgba(30, 30, 30, 0.08);
-  --border-strong: rgba(30, 30, 0, 0.15);
-  --shadow-soft: 0 12px 30px rgba(141, 135, 65, 0.15);
+  --surface-strong: #fff7e8;
+  --text: #1f1f1f;
+  --text-strong: #121212;
+  --text-muted: #5c5c5c;
+  --accent: #d62f2f;
+  --accent-strong: #b10f0f;
+  --accent-soft: #ffe6e0;
+  --sun: #f4b000;
+  --border-soft: rgba(30, 30, 30, 0.12);
+  --border-strong: rgba(30, 30, 30, 0.24);
+  --shadow-soft: 0 16px 40px rgba(0, 0, 0, 0.08);
 
-  --sans: 'Outfit', 'Inter', 'Segoe UI', sans-serif;
-  --heading: 'Unbounded', sans-serif;
+  --sans: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  --heading: 'Unbounded', 'Trebuchet MS', sans-serif;
 
-  font: 16px/1.6 var(--sans);
+  font: 16px/1.5 var(--sans);
   color: var(--text);
   background: var(--bg);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  font-synthesis: none;
 }
 
 :root[data-theme='dark'] {
-  --bg: #1A1915;
-  --bg-grad: linear-gradient(135deg, #1A1915 0%, #3E3B30 100%);
-  --surface: #2A2821;
-  --surface-strong: #3D392C;
-  --text: #FBEEC1;
-  --text-strong: #FFFFFF;
-  --text-muted: #BC986A;
-  --accent: #DAAD86;
-  --accent-strong: #BC986A;
-  --accent-soft: rgba(218, 173, 134, 0.15);
-  --secondary: #659DBD;
-  --border-soft: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.15);
-  --shadow-soft: 0 12px 30px rgba(0, 0, 0, 0.3);
+  --bg: #0f1012;
+  --bg-grad:
+    radial-gradient(circle at 10% 20%, rgba(182, 35, 35, 0.18), transparent 40%),
+    radial-gradient(circle at 80% 0%, rgba(244, 176, 0, 0.18), transparent 40%),
+    linear-gradient(160deg, #111317 0%, #0d0d0f 60%, #15171b 100%);
+  --surface: #17181c;
+  --surface-strong: #1c1e23;
+  --text: #f0f0f0;
+  --text-strong: #ffffff;
+  --text-muted: #c1c1c1;
+  --accent: #ff4a4a;
+  --accent-strong: #ff2b2b;
+  --accent-soft: rgba(255, 74, 74, 0.15);
+  --sun: #ffcc4d;
+  --border-soft: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.24);
+  --shadow-soft: 0 18px 50px rgba(0, 0, 0, 0.4);
 }
 
 * {
