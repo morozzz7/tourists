@@ -35,6 +35,8 @@ id_rsa
 id_rsa.pub
 id_ed25519
 id_ed25519.pub
+12345
+12345.pub
 
 # OS / editor
 .DS_Store
