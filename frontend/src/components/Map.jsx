@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Rectangle } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
@@ -12,12 +12,18 @@ L.Icon.Default.mergeOptions({
 })
 
 const RYAZAN_CENTER = [54.6292, 39.7351]
+const YANDEX_API_KEY = import.meta.env.VITE_YANDEX_MAPS_API_KEY || ''
 const OVERPASS_ENDPOINTS = [
-  'https://overpass.kumi.systems/api/interpreter',
-  'https://overpass.openstreetmap.ru/api/interpreter',
-  'https://overpass.nchc.org.tw/api/interpreter',
   'https://overpass-api.de/api/interpreter',
+  'https://overpass.openstreetmap.ru/api/interpreter',
 ]
+const CACHE_KEY = 'ryazan-poi-cache-v1'
+const CACHE_TTL_MS = 12 * 60 * 60 * 1000
+const WIKI_CACHE_KEY = 'ryazan-wiki-summary-v1'
+const WIKI_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const YANDEX_LANG = 'ru_RU'
+const WIKI_SUMMARY_ENDPOINT = 'https://ru.wikipedia.org/api/rest_v1/page/summary/'
+const WIKI_SEARCH_ENDPOINT = 'https://ru.wikipedia.org/w/rest.php/v1/search/page'
 const FALLBACK_LOCATIONS = [
   {
     id: 'fallback-1',
@@ -79,10 +85,140 @@ const fetchFromOverpass = async (query) => {
   throw lastError || new Error('Overpass error')
 }
 
+const escapeHtml = (value) =>
+  String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
+const readWikiCache = () => {
+  try {
+    const raw = localStorage.getItem(WIKI_CACHE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    if (!parsed?.ts || !parsed?.data) return {}
+    if (Date.now() - parsed.ts > WIKI_CACHE_TTL_MS) return {}
+    return parsed.data
+  } catch {
+    return {}
+  }
+}
+
+const writeWikiCache = (data) => {
+  try {
+    localStorage.setItem(
+      WIKI_CACHE_KEY,
+      JSON.stringify({ ts: Date.now(), data }),
+    )
+  } catch {
+    // ignore cache write errors
+  }
+}
+
+const fetchWikiSummary = async (title) => {
+  const encodedTitle = encodeURIComponent(title)
+  const summaryResponse = await fetch(`${WIKI_SUMMARY_ENDPOINT}${encodedTitle}`)
+  if (summaryResponse.ok) {
+    return await summaryResponse.json()
+  }
+  if (summaryResponse.status !== 404) {
+    throw new Error('Wikipedia summary error')
+  }
+  const searchParams = new URLSearchParams({
+    q: title,
+    limit: '1',
+  })
+  const searchResponse = await fetch(`${WIKI_SEARCH_ENDPOINT}?${searchParams.toString()}`)
+  if (!searchResponse.ok) {
+    throw new Error('Wikipedia search error')
+  }
+  const searchData = await searchResponse.json()
+  const first = searchData?.pages?.[0]
+  if (!first?.title) return null
+  const fallbackSummary = await fetch(
+    `${WIKI_SUMMARY_ENDPOINT}${encodeURIComponent(first.title)}`,
+  )
+  if (!fallbackSummary.ok) return null
+  return await fallbackSummary.json()
+}
+
+const normalizeSummary = (summary) => {
+  if (!summary) return null
+  const extract = summary.extract || ''
+  const short =
+    extract.length > 240 ? extract.slice(0, 237).trimEnd() + '…' : extract
+  return {
+    title: summary.title || '',
+    extract: short || 'Описание не найдено',
+    url: summary?.content_urls?.desktop?.page || '',
+  }
+}
+
+const runWithConcurrency = async (items, limit, handler) => {
+  const queue = [...items]
+  const workers = Array.from({ length: limit }, async () => {
+    while (queue.length) {
+      const item = queue.shift()
+      // eslint-disable-next-line no-await-in-loop
+      await handler(item)
+    }
+  })
+  await Promise.all(workers)
+}
+
+const readPoiCache = ({ allowStale = false } = {}) => {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed?.data || !parsed?.ts) return null
+    if (!allowStale && Date.now() - parsed.ts > CACHE_TTL_MS) return null
+    return parsed.data
+  } catch {
+    return null
+  }
+}
+
+const writePoiCache = (data) => {
+  try {
+    localStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({ ts: Date.now(), data }),
+    )
+  } catch {
+    // ignore cache write errors
+  }
+}
+
+let yandexLoaderPromise = null
+
+const loadYandexMaps = (apiKey) => {
+  if (!apiKey) return Promise.reject(new Error('Missing Yandex API key'))
+  if (window.ymaps) return Promise.resolve(window.ymaps)
+  if (yandexLoaderPromise) return yandexLoaderPromise
+
+  yandexLoaderPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script')
+    script.src = `https://api-maps.yandex.ru/2.1/?apikey=${apiKey}&lang=${YANDEX_LANG}`
+    script.async = true
+    script.onload = () => resolve(window.ymaps)
+    script.onerror = () => reject(new Error('Failed to load Yandex Maps'))
+    document.head.appendChild(script)
+  })
+
+  return yandexLoaderPromise
+}
+
 const RyazanMap = ({ onSelectPoi }) => {
   const [locations, setLocations] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [provider, setProvider] = useState('leaflet')
+  const [wikiById, setWikiById] = useState({})
+  const yandexContainerRef = useRef(null)
+  const yandexMapRef = useRef(null)
 
   const [captured, setCaptured] = useState(new Set(['t1', 't3']))
   const progress = Math.round((captured.size / TERRITORIES.length) * 100)
@@ -92,6 +228,12 @@ const RyazanMap = ({ onSelectPoi }) => {
       try {
         setLoading(true)
         setError(null)
+        const cached = readPoiCache()
+        if (cached) {
+          setLocations(cached)
+          setLoading(false)
+          return
+        }
         const query =
           '[out:json][timeout:25];\n' +
           '(\n' +
@@ -145,11 +287,18 @@ const RyazanMap = ({ onSelectPoi }) => {
           setError('Точки из API не найдены, показаны демо-локации')
         } else {
           setLocations(normalized)
+          writePoiCache(normalized)
           setError(null)
         }
       } catch (err) {
-        setLocations(FALLBACK_LOCATIONS)
-        setError('Не удалось загрузить точки интереса, показаны демо-локации')
+        const cached = readPoiCache({ allowStale: true })
+        if (cached) {
+          setLocations(cached)
+          setError('Показаны кешированные точки, обновление не удалось')
+        } else {
+          setLocations(FALLBACK_LOCATIONS)
+          setError('Не удалось загрузить точки интереса, показаны демо-локации')
+        }
       } finally {
         setLoading(false)
       }
@@ -157,6 +306,130 @@ const RyazanMap = ({ onSelectPoi }) => {
 
     fetchPoi()
   }, [])
+
+  useEffect(() => {
+    if (!locations.length) return
+
+    let cancelled = false
+    const cached = readWikiCache()
+    const updates = {}
+
+    locations.forEach((loc) => {
+      const cachedItem = cached[loc.name]
+      if (cachedItem) {
+        updates[loc.id] = cachedItem
+      }
+    })
+    if (Object.keys(updates).length) {
+      setWikiById((prev) => ({ ...prev, ...updates }))
+    }
+
+    const toFetch = locations.filter((loc) => !cached[loc.name])
+
+    runWithConcurrency(toFetch, 3, async (loc) => {
+      try {
+        const summary = await fetchWikiSummary(loc.name)
+        const normalized = normalizeSummary(summary)
+        if (!normalized) return
+        cached[loc.name] = normalized
+        if (cancelled) return
+        setWikiById((prev) => ({ ...prev, [loc.id]: normalized }))
+        writeWikiCache(cached)
+      } catch {
+        // ignore summary errors
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [locations])
+
+  useEffect(() => {
+    if (provider !== 'yandex') return undefined
+    if (!YANDEX_API_KEY) return undefined
+
+    let destroyed = false
+
+    loadYandexMaps(YANDEX_API_KEY)
+      .then((ymaps) => {
+        ymaps.ready(() => {
+          if (destroyed || !yandexContainerRef.current) return
+          if (yandexMapRef.current) return
+          yandexMapRef.current = new ymaps.Map(
+            yandexContainerRef.current,
+            {
+              center: RYAZAN_CENTER,
+              zoom: 13,
+              controls: ['zoomControl'],
+            },
+            {
+              suppressMapOpenBlock: true,
+            },
+          )
+        })
+      })
+      .catch(() => {
+        setError('Не удалось загрузить Яндекс.Карты')
+      })
+
+    return () => {
+      destroyed = true
+      if (yandexMapRef.current) {
+        yandexMapRef.current.destroy()
+        yandexMapRef.current = null
+      }
+    }
+  }, [provider])
+
+  useEffect(() => {
+    if (provider !== 'yandex') return
+    const map = yandexMapRef.current
+    if (!map) return
+
+    map.geoObjects.removeAll()
+
+    TERRITORIES.forEach((territory) => {
+      const [[lat1, lon1], [lat2, lon2]] = territory.bounds
+      const polygon = new window.ymaps.Polygon(
+        [
+          [
+            [lat1, lon1],
+            [lat1, lon2],
+            [lat2, lon2],
+            [lat2, lon1],
+            [lat1, lon1],
+          ],
+        ],
+        {},
+        {
+          fillColor: captured.has(territory.id) ? '#d62f2f55' : '#cccccc55',
+          strokeColor: captured.has(territory.id) ? '#d62f2f' : '#999999',
+          strokeWidth: 2,
+        },
+      )
+      polygon.events.add('click', () => toggleCapture(territory.id))
+      map.geoObjects.add(polygon)
+    })
+
+    locations.forEach((loc) => {
+      const wiki = wikiById[loc.id]
+      const title = escapeHtml(wiki?.title || loc.name)
+      const desc = escapeHtml(wiki?.extract || 'Описание не найдено')
+      const link = wiki?.url
+        ? `<br/><a href="${escapeHtml(wiki.url)}" target="_blank" rel="noreferrer">Статья</a>`
+        : ''
+      const placemark = new window.ymaps.Placemark(
+        loc.coords,
+        {
+          balloonContent: `<strong>${title}</strong><br/>${desc}${link}`,
+        },
+        { preset: 'islands#redIcon' },
+      )
+      placemark.events.add('click', () => onSelectPoi?.(loc))
+      map.geoObjects.add(placemark)
+    })
+  }, [provider, locations, captured, onSelectPoi, wikiById])
 
   const toggleCapture = (id) => {
     setCaptured((prev) => {
@@ -174,46 +447,92 @@ const RyazanMap = ({ onSelectPoi }) => {
 
   return (
     <div className="map-frame">
-      <MapContainer center={RYAZAN_CENTER} zoom={14} style={{ height: '100%', width: '100%' }}>
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png"
-          attribution='&copy; OpenStreetMap contributors'
-        />
-        {TERRITORIES.map((territory) => (
-          <Rectangle
-            key={territory.id}
-            bounds={territory.bounds}
-            pathOptions={{
-              color: captured.has(territory.id) ? '#d62f2f' : '#999999',
-              fillColor: captured.has(territory.id) ? '#d62f2f' : '#cccccc',
-              fillOpacity: captured.has(territory.id) ? 0.35 : 0.15,
-              weight: 2,
-            }}
-            eventHandlers={{
-              click: () => toggleCapture(territory.id),
-            }}
+      {provider === 'leaflet' && (
+        <MapContainer
+          center={RYAZAN_CENTER}
+          zoom={14}
+          style={{ height: '100%', width: '100%', minHeight: '520px' }}
+        >
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; OpenStreetMap contributors'
           />
-        ))}
-        {locations.map((loc) => (
+          {TERRITORIES.map((territory) => (
+            <Rectangle
+              key={territory.id}
+              bounds={territory.bounds}
+              pathOptions={{
+                color: captured.has(territory.id) ? '#d62f2f' : '#999999',
+                fillColor: captured.has(territory.id) ? '#d62f2f' : '#cccccc',
+                fillOpacity: captured.has(territory.id) ? 0.35 : 0.15,
+                weight: 2,
+              }}
+              eventHandlers={{
+                click: () => toggleCapture(territory.id),
+              }}
+            />
+          ))}
+          {locations.map((loc) => (
           <Marker key={loc.id} position={loc.coords}>
             <Popup className="custom-popup">
               <div className="map-popup">
-                <h3>{loc.name}</h3>
-                <p>Категория: {loc.category}</p>
+                <h3>{wikiById[loc.id]?.title || loc.name}</h3>
+                <p>{wikiById[loc.id]?.extract || 'Описание не найдено'}</p>
+                {wikiById[loc.id]?.url && (
+                  <a
+                    className="map-popup-link"
+                    href={wikiById[loc.id].url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Статья
+                  </a>
+                )}
                 <button
                   className="map-popup-btn"
                   onClick={() => onSelectPoi?.(loc)}
                 >
                   Открыть карточку
-                </button>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-      </MapContainer>
+                  </button>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
+        </MapContainer>
+      )}
+
+      {provider === 'yandex' && (
+        <div
+          className="map-yandex"
+          ref={yandexContainerRef}
+          aria-label="Yandex map"
+        >
+          {!YANDEX_API_KEY && (
+            <div className="map-provider-warning">
+              Нужен ключ Яндекс.Карт. Добавь `VITE_YANDEX_MAPS_API_KEY` в `.env`.
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="map-overlay-card">
         <p className="map-overlay-title">Открытие территорий</p>
+        <div className="map-provider-toggle">
+          <button
+            className={`map-provider-btn ${provider === 'leaflet' ? 'active' : ''}`}
+            onClick={() => setProvider('leaflet')}
+            type="button"
+          >
+            Leaflet
+          </button>
+          <button
+            className={`map-provider-btn ${provider === 'yandex' ? 'active' : ''}`}
+            onClick={() => setProvider('yandex')}
+            type="button"
+          >
+            Яндекс
+          </button>
+        </div>
         <div className="map-overlay-row">
           <span>Прогресс</span>
           <span className="map-overlay-accent">{progress}%</span>

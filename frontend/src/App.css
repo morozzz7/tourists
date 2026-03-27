@@ -269,6 +269,9 @@ h1 {
   overflow: hidden;
   border: 1px solid var(--border-soft);
   box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.05);
+  background: #eef2f5;
+  z-index: 0;
+  isolation: isolate;
 }
 
 .map-frame .leaflet-container {
@@ -280,8 +283,8 @@ h1 {
   display: none;
   position: absolute;
   inset: 0;
-  backdrop-filter: blur(6px);
-  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: none;
+  background: transparent;
   pointer-events: none;
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 700 420'><rect width='700' height='420' fill='white'/><path d='M231 89 L315 58 L399 79 L470 136 L507 210 L466 294 L382 336 L295 321 L248 273 L200 208 L202 140 Z' fill='black'/></svg>");
   mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 700 420'><rect width='700' height='420' fill='white'/><path d='M231 89 L315 58 L399 79 L470 136 L507 210 L466 294 L382 336 L295 321 L248 273 L200 208 L202 140 Z' fill='black'/></svg>");
@@ -294,7 +297,7 @@ h1 {
 
 @supports ((-webkit-mask-image: url("")) or (mask-image: url(""))) {
   .map-mask {
-    display: block;
+    display: none;
   }
 }
 
@@ -329,7 +332,7 @@ h1 {
   padding: 14px 16px;
   border: 1px solid rgba(255, 255, 255, 0.6);
   box-shadow: var(--shadow-soft);
-  z-index: 4;
+  z-index: 2000;
   width: 200px;
 }
 
@@ -345,6 +348,51 @@ h1 {
   text-transform: uppercase;
   color: var(--text-muted);
   font-weight: 700;
+}
+
+.map-provider-toggle {
+  display: inline-flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.map-provider-btn {
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  color: var(--text-strong);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.map-provider-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.map-yandex {
+  width: 100%;
+  height: 100%;
+  min-height: 520px;
+  position: relative;
+  z-index: 1;
+}
+
+.map-provider-warning {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-strong);
+  z-index: 25;
+  border: 1px solid var(--border-soft);
 }
 
 .map-overlay-row {
@@ -428,6 +476,7 @@ h1 {
 
 .map-page-body {
   min-height: 80vh;
+  display: flex;
 }
 
 .page-standalone {
@@ -562,7 +611,7 @@ h1 {
   flex-direction: column;
   align-items: flex-end;
   gap: 12px;
-  z-index: 50;
+  z-index: 1000;
 }
 
 .chat-fab {
