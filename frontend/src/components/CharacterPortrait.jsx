@@ -1,6 +1,6 @@
 import './CharacterPortrait.css';
 
-const DEFAULT_AVATAR = `${import.meta.env.BASE_URL}images/esenin.jpg`;
+const DEFAULT_AVATAR = `${import.meta.env.BASE_URL}images/realesenin.jpg`;
 
 export function CharacterPortraitSkeleton({ caption = 'Загрузка сценария…' }) {
   return (

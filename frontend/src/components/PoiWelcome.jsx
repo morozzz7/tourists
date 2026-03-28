@@ -1,23 +1,19 @@
 // src/components/PoiWelcome.jsx
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import TalkingGuide2D from './TalkingGuide2D';
-import CharacterPortrait, { CharacterPortraitSkeleton } from './CharacterPortrait';
-import {
-  ESENIN_SCREEN_QUOTE,
-  eseninNarrationVoice,
-  isEseninPoi,
-  parseEseninTextsDocx,
-} from '../utils/parseEseninTextsDocx';
+import CharacterPortrait from './CharacterPortrait';
+import { ESENIN_SCREEN_QUOTE, isEseninPoi, parseEseninTextsDocx } from '../utils/parseEseninTextsDocx';
 import { pickRussianMaleVoice } from '../utils/ttsVoice';
 import './PoiWelcome.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
 const TEXTS_DOC_URL = `${import.meta.env.BASE_URL}texts.docx`;
-const ESENIN_PORTRAIT = `${import.meta.env.BASE_URL}images/esenin.jpg`;
-/** Файл изображения: памятникесенину.jpg (в public/images/) */
+const ESENIN_PORTRAIT = `${import.meta.env.BASE_URL}images/realesenin.jpg`;
 const ESENIN_MONUMENT = `${import.meta.env.BASE_URL}images/%D0%BF%D0%B0%D0%BC%D1%8F%D1%82%D0%BD%D0%B8%D0%BA%D0%B5%D1%81%D0%B5%D0%BD%D0%B8%D0%BD%D1%83.jpg`;
+/** Запись голоса (файл ГолосЕсенина.mp3 → golos-esenina.mp3 в public/audio/) */
+const ESENIN_AUDIO_SRC = `${import.meta.env.BASE_URL}audio/golos-esenina.mp3`;
 
 function speakNarration({ text, rate, pitch, preferMaleVoice = false }, { onStart, onEnd }) {
   const t = (text || '').trim();
@@ -69,37 +65,14 @@ export default function PoiWelcome() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [ttsSupported, setTtsSupported] = useState(true);
   const [eseninDoc, setEseninDoc] = useState(null);
-  /** idle | playing | paused — для паузы TTS Есенина */
-  const [eseninPlayState, setEseninPlayState] = useState('idle');
+  const audioRef = useRef(null);
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const [audioPositionSec, setAudioPositionSec] = useState(0);
 
   const isEsenin = useMemo(() => (poi ? isEseninPoi(poi) : false), [poi]);
 
-  /** Озвучка: для Есенина — весь монолог из texts.docx; мужской голос TTS (тембр Безрукова из mp3 в браузере нельзя отделить от записи). */
   const narration = useMemo(() => {
-    if (!poi) return null;
-    if (isEsenin) {
-      if (eseninDoc === 'loading' || eseninDoc === null) return null;
-      if (eseninDoc === 'error') {
-        const text = (poi.character_text || '').trim();
-        if (!text) return null;
-        const v = eseninNarrationVoice();
-        return {
-          text,
-          rate: v.rate,
-          pitch: v.pitch,
-          preferMaleVoice: true,
-        };
-      }
-      const text = (eseninDoc.speechText || poi.character_text || '').trim();
-      if (!text) return null;
-      const v = eseninDoc.voice || eseninNarrationVoice();
-      return {
-        text,
-        rate: v.rate,
-        pitch: v.pitch,
-        preferMaleVoice: true,
-      };
-    }
+    if (!poi || isEsenin) return null;
     const text = (poi.character_text || '').trim();
     if (!text) return null;
     return {
@@ -108,7 +81,7 @@ export default function PoiWelcome() {
       pitch: Number(poi.character_voice_pitch) || 1,
       preferMaleVoice: false,
     };
-  }, [poi, isEsenin, eseninDoc]);
+  }, [poi, isEsenin]);
 
   const bubbleText = useMemo(() => {
     if (!poi) return '';
@@ -131,41 +104,28 @@ export default function PoiWelcome() {
         preferMaleVoice: narration.preferMaleVoice,
       },
       {
-        onStart: () => {
-          setIsSpeaking(true);
-          if (isEsenin) setEseninPlayState('playing');
-        },
-        onEnd: () => {
-          setIsSpeaking(false);
-          if (isEsenin) setEseninPlayState('idle');
-        },
+        onStart: () => setIsSpeaking(true),
+        onEnd: () => setIsSpeaking(false),
       },
     );
-  }, [narration, isEsenin]);
+  }, [narration]);
 
-  const toggleEseninPause = useCallback(() => {
-    const s = window.speechSynthesis;
-    if (s.speaking && !s.paused) {
-      s.pause();
-      setEseninPlayState('paused');
-    } else if (s.paused) {
-      s.resume();
-      setEseninPlayState('playing');
-    } else {
-      speakFromStart();
-    }
-  }, [speakFromStart]);
+  const toggleEseninAudio = useCallback(() => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (a.paused) void a.play().catch(() => {});
+    else a.pause();
+  }, []);
 
-  const restartEseninSpeech = useCallback(() => {
-    window.speechSynthesis.cancel();
-    setEseninPlayState('idle');
-    setIsSpeaking(false);
-    window.setTimeout(() => speakFromStart(), 80);
-  }, [speakFromStart]);
+  const restartEseninAudio = useCallback(() => {
+    const a = audioRef.current;
+    if (!a) return;
+    a.pause();
+    a.currentTime = 0;
+    void a.play().catch(() => {});
+  }, []);
 
-  const startSpeech = useCallback(() => {
-    speakFromStart();
-  }, [speakFromStart]);
+  const startSpeech = useCallback(() => speakFromStart(), [speakFromStart]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -218,11 +178,10 @@ export default function PoiWelcome() {
   }, [poi]);
 
   useEffect(() => {
+    if (isEsenin) return;
     if (!narration?.text?.trim()) return;
 
-    const timer = window.setTimeout(() => {
-      speakFromStart();
-    }, 450);
+    const timer = window.setTimeout(() => speakFromStart(), 450);
 
     return () => {
       window.clearTimeout(timer);
@@ -230,12 +189,33 @@ export default function PoiWelcome() {
         window.speechSynthesis.cancel();
       }
       setIsSpeaking(false);
-      setEseninPlayState('idle');
     };
-  }, [narration, speakFromStart]);
+  }, [narration, speakFromStart, isEsenin]);
+
+  useEffect(() => {
+    if (!isEsenin) return;
+    if (eseninDoc === 'loading' || eseninDoc === null) return;
+
+    const a = audioRef.current;
+    if (!a) return;
+
+    const timer = window.setTimeout(() => {
+      void a.play().catch(() => {});
+    }, 450);
+
+    return () => {
+      window.clearTimeout(timer);
+      a.pause();
+    };
+  }, [isEsenin, eseninDoc]);
 
   useEffect(() => {
     return () => {
+      const a = audioRef.current;
+      if (a) {
+        a.pause();
+        a.currentTime = 0;
+      }
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
@@ -257,9 +237,9 @@ export default function PoiWelcome() {
 
   if (loading) {
     return (
-      <div className="welcome-container loading">
+      <div className="welcome-container loading poi-welcome-theme">
         <div className="welcome-loading-inner">
-          <div className="spinner" />
+          <div className="spinner poi-welcome-spinner" />
           <p>Загрузка карточки…</p>
         </div>
       </div>
@@ -267,10 +247,10 @@ export default function PoiWelcome() {
   }
   if (error) {
     return (
-      <div className="welcome-container error">
+      <div className="welcome-container error poi-welcome-theme">
         <h1>{error}</h1>
         <p>
-          <button type="button" className="action-button" onClick={() => navigate('/')}>
+          <button type="button" className="poi-welcome-btn poi-welcome-btn--primary" onClick={() => navigate('/')}>
             На главную
           </button>
         </p>
@@ -281,28 +261,40 @@ export default function PoiWelcome() {
   const imageSrc = poi.image && String(poi.image).trim() ? poi.image : null;
   const monumentSrc = isEsenin ? imageSrc || ESENIN_MONUMENT : imageSrc;
   const eseninCaption = poi.character_name || 'Сергей Есенин';
-  const eseninPortraitLoading = isEsenin && (eseninDoc === null || eseninDoc === 'loading');
-  const portraitAnimEsenin = isEsenin && eseninPlayState === 'playing';
-  const portraitSpeaking = isEsenin ? portraitAnimEsenin : isSpeaking;
+  const portraitSpeaking = isEsenin ? audioPlaying : isSpeaking;
 
-  const eseninListenLabel =
-    eseninPlayState === 'playing' ? 'Пауза' : eseninPlayState === 'paused' ? 'Продолжить' : 'Слушать монолог';
+  const eseninListenLabel = audioPlaying
+    ? 'Пауза'
+    : audioPositionSec > 0.2
+      ? 'Продолжить'
+      : 'Слушать монолог';
 
   return (
-    <div className="welcome-container poi-welcome-page">
+    <div className="welcome-container poi-welcome-page poi-welcome-theme">
+      <audio
+        ref={audioRef}
+        className="poi-welcome-audio-el"
+        src={isEsenin ? ESENIN_AUDIO_SRC : undefined}
+        preload="auto"
+        playsInline
+        onPlay={() => setAudioPlaying(true)}
+        onPause={() => setAudioPlaying(false)}
+        onEnded={() => {
+          setAudioPlaying(false);
+          setAudioPositionSec(0);
+        }}
+        onTimeUpdate={(e) => setAudioPositionSec(e.currentTarget.currentTime)}
+      />
+
       <div className={`poi-welcome-card ${isEsenin ? 'poi-welcome-card--esenin' : ''}`.trim()}>
         <div className="poi-welcome-stage">
           {isEsenin ? (
-            eseninPortraitLoading ? (
-              <CharacterPortraitSkeleton />
-            ) : (
-              <CharacterPortrait
-                src={ESENIN_PORTRAIT}
-                alt="Сергей Есенин"
-                caption={eseninCaption}
-                isSpeaking={portraitSpeaking}
-              />
-            )
+            <CharacterPortrait
+              src={ESENIN_PORTRAIT}
+              alt="Сергей Есенин"
+              caption={eseninCaption}
+              isSpeaking={portraitSpeaking}
+            />
           ) : (
             <TalkingGuide2D isSpeaking={isSpeaking} name={poi.character_name} />
           )}
@@ -321,19 +313,13 @@ export default function PoiWelcome() {
           >
             {isEsenin ? (
               <>
-                <button
-                  type="button"
-                  className="poi-welcome-speak-btn"
-                  onClick={toggleEseninPause}
-                  disabled={!ttsSupported || !narration?.text?.trim()}
-                >
+                <button type="button" className="poi-welcome-speak-btn" onClick={toggleEseninAudio}>
                   {eseninListenLabel}
                 </button>
                 <button
                   type="button"
                   className="poi-welcome-speak-btn poi-welcome-speak-btn--secondary"
-                  onClick={restartEseninSpeech}
-                  disabled={!ttsSupported || !narration?.text?.trim()}
+                  onClick={restartEseninAudio}
                 >
                   С начала
                 </button>
@@ -345,7 +331,7 @@ export default function PoiWelcome() {
                 onClick={startSpeech}
                 disabled={isSpeaking || !narration?.text?.trim()}
               >
-                {isSpeaking ? '🔊 Говорит…' : '🔊 Прослушать снова'}
+                {isSpeaking ? 'Говорит…' : 'Прослушать снова'}
               </button>
             ) : (
               <p className="poi-welcome-tts-warning">Озвучка недоступна в этом браузере.</p>
@@ -359,18 +345,14 @@ export default function PoiWelcome() {
           {isEsenin ? (
             <>
               <figure className="poi-welcome-monument">
-                <img
-                  src={monumentSrc}
-                  alt={poi.title}
-                  className="poi-welcome-monument__img"
-                />
+                <img src={monumentSrc} alt={poi.title} className="poi-welcome-monument__img" />
                 <figcaption className="poi-welcome-monument__cap">{poi.title}</figcaption>
               </figure>
               <div className="poi-actions">
-                <button type="button" onClick={() => navigate('/')} className="ghost">
+                <button type="button" onClick={() => navigate('/')} className="ghost poi-welcome-ghost">
                   На главную
                 </button>
-                <button type="button" onClick={handleCheckIn} className="primary">
+                <button type="button" onClick={handleCheckIn} className="primary poi-welcome-primary">
                   Я здесь!
                 </button>
               </div>
@@ -387,10 +369,10 @@ export default function PoiWelcome() {
               <h1>{poi.title}</h1>
               <p className="poi-info">{poi.info || poi.description}</p>
               <div className="poi-actions">
-                <button type="button" onClick={() => navigate('/')} className="ghost">
+                <button type="button" onClick={() => navigate('/')} className="ghost poi-welcome-ghost">
                   На главную
                 </button>
-                <button type="button" onClick={handleCheckIn} className="primary">
+                <button type="button" onClick={handleCheckIn} className="primary poi-welcome-primary">
                   Я здесь!
                 </button>
               </div>

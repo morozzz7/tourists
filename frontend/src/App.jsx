@@ -906,7 +906,9 @@ function App() {
   const [authLoading, setAuthLoading] = useState(false)
   const [password, setPassword] = useState('')
   const [user, setUser] = useState(null)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 901px)').matches : true,
+  )
   const [points, setPoints] = useState(1240)
   const [collectedCards, setCollectedCards] = useState(new Set())
   const [checkinStatus, setCheckinStatus] = useState({})
@@ -1371,6 +1373,19 @@ function App() {
     const isHome = location.pathname === '/'
     return (
       <div className={`app ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
+        <button
+          type="button"
+          className="mobile-menu-fab"
+          aria-label="Открыть меню"
+          onClick={() => setSidebarOpen(true)}
+        >
+          Меню
+        </button>
+        <div
+          className="sidebar-backdrop"
+          aria-hidden="true"
+          onClick={() => setSidebarOpen(false)}
+        />
         <Sidebar {...shellProps} />
         <main className="main">
           {!isHome && (
