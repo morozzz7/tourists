@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom'
 import RyazanMap from './components/Map'
 import QRAdmin from './components/QRAdmin'
@@ -18,6 +18,14 @@ const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
 const formatNumber = (value) => value.toLocaleString('ru-RU')
 const calculateLevel = (points) => Math.floor(points / 500) + 1
+const DISABLE_GEO_CHECK = true
+const normalizeName = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/[ё]/g, 'е')
+    .replace(/[^a-zа-я0-9 ]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 const toRadians = (value) => (value * Math.PI) / 180
 const getDistanceMeters = (from, to) => {
   const R = 6371000
@@ -31,6 +39,15 @@ const getDistanceMeters = (from, to) => {
   return 2 * R * Math.asin(Math.sqrt(a))
 }
 
+const TERRITORIES = [
+  { id: 't1', name: 'Кремль', bounds: [[54.633, 39.742], [54.638, 39.752]] },
+  { id: 't2', name: 'Соборная', bounds: [[54.629, 39.737], [54.634, 39.746]] },
+  { id: 't3', name: 'Набережная', bounds: [[54.625, 39.731], [54.631, 39.739]] },
+  { id: 't4', name: 'ЦПКиО', bounds: [[54.624, 39.742], [54.629, 39.751]] },
+  { id: 't5', name: 'Музейный квартал', bounds: [[54.631, 39.752], [54.636, 39.760]] },
+  { id: 't6', name: 'Лыбедский бульвар', bounds: [[54.626, 39.724], [54.632, 39.733]] },
+]
+
 const GAME_CARDS = [
   {
     id: 'poi-kremlin',
@@ -40,14 +57,16 @@ const GAME_CARDS = [
       'Главный исторический комплекс города с соборами, колокольней и панорамой на Оку.',
     coords: [54.6348, 39.7486],
     points: 120,
+    qrPoints: 20,
     radius: 160,
-    image: 'https://picsum.photos/seed/ryazan-kremlin/900/600',
+    image: '/images/kremlin.jpg',
     character: {
       name: 'Гид Федот',
       text:
         'Добро пожаловать в сердце древней Рязани! Посмотри вверх — колокольня хранит сотни лет историй.',
       voice: { rate: 1, pitch: 0.9 },
     },
+    active: false,
   },
   {
     id: 'poi-esenin',
@@ -57,14 +76,17 @@ const GAME_CARDS = [
       'Монумент поэту у набережной — любимая точка прогулок и городских маршрутов.',
     coords: [54.636, 39.747],
     points: 90,
+    qrPoints: 25,
     radius: 140,
-    image: 'https://picsum.photos/seed/ryazan-esenin/900/600',
+    image: '/images/esenin.jpg',
     character: {
-      name: 'Муза Лада',
+      name: 'Сергей Есенин',
       text:
         'Ты здесь — и строки оживают. Вдохни воздух Оки и запомни этот вид.',
+      audio: '/audio/esenin.mp3',
       voice: { rate: 1.05, pitch: 1.2 },
     },
+    active: true,
   },
   {
     id: 'poi-mushrooms',
@@ -74,14 +96,16 @@ const GAME_CARDS = [
       'Городская легенда и любимое место для фото: улыбчивые грибы охраняют район.',
     coords: [54.6288, 39.7345],
     points: 70,
+    qrPoints: 15,
     radius: 120,
-    image: 'https://picsum.photos/seed/ryazan-mushrooms/900/600',
+    image: '/images/mushrooms.jpg',
     character: {
       name: 'Буба',
       text:
         'Эти грибы с глазами знают все тайные тропы. Сделай фото и получи дружескую улыбку!',
       voice: { rate: 0.95, pitch: 1.15 },
     },
+    active: false,
   },
   {
     id: 'poi-theatre',
@@ -91,14 +115,16 @@ const GAME_CARDS = [
       'Один из старейших театров региона, где каждый сезон звучат премьеры и классика.',
     coords: [54.6322, 39.7325],
     points: 110,
+    qrPoints: 20,
     radius: 150,
-    image: 'https://picsum.photos/seed/ryazan-theatre/900/600',
+    image: '/images/drama.jpg',
     character: {
       name: 'Режиссер Аркадий',
       text:
         'Свет рампы уже близко! Представь, как здесь звучит аплодисмент после премьеры.',
       voice: { rate: 0.98, pitch: 0.85 },
     },
+    active: false,
   },
   {
     id: 'poi-pedestrian',
@@ -108,15 +134,23 @@ const GAME_CARDS = [
       'Главная прогулочная улица с кофейнями, музыкой и ярмарками в сезон.',
     coords: [54.6299, 39.7378],
     points: 80,
+    qrPoints: 15,
     radius: 130,
-    image: 'https://picsum.photos/seed/ryazan-street/900/600',
+    image: '/images/post.jpg',
     character: {
       name: 'Курьер Сева',
       text:
         'Быстрый маршрут готов! Слушай шум улицы и собирай отметки на пути.',
       voice: { rate: 1.1, pitch: 1.0 },
     },
+    active: false,
   },
+]
+
+const REWARDS = [
+  { id: 'reward-coffee', title: 'Кофе и выпечка', cost: 200 },
+  { id: 'reward-bike', title: 'Прокат велосипедов', cost: 350 },
+  { id: 'reward-museum', title: 'Билет в музей', cost: 500 },
 ]
 
 const getCookie = (name) => {
@@ -141,7 +175,88 @@ const PageShell = ({ title, subtitle, children }) => (
   </div>
 )
 
-const FullMapPage = ({ onSelectPoi, userLocation, locationStatus, locationError }) => {
+const Sidebar = ({
+  onOpenModal,
+  onToggleTheme,
+  theme,
+  sidebarOpen,
+  onToggleSidebar,
+  user,
+  onLogout,
+  points,
+  level,
+}) => (
+  <aside className="sidebar">
+    <button className="sidebar-toggle" onClick={onToggleSidebar}>
+      {sidebarOpen ? 'Свернуть' : 'Меню'}
+    </button>
+    <div className="account">
+      <div className="avatar" aria-hidden="true"></div>
+      <div className="account-info">
+        <p className="account-title">{user?.name || user?.email || 'Гость'}</p>
+        <p className="account-subtitle">
+          {user ? 'Профиль активен' : 'Рязань, на старте'}
+        </p>
+        <p className="account-level">
+          Уровень {level} · {formatNumber(points)} баллов
+        </p>
+      </div>
+    </div>
+    <nav className="menu">
+      <Link to="/routes">Экскурсии и квесты</Link>
+      <Link to="/kids">Детский аудиогид</Link>
+      <Link to="/cards">Коллекционные карточки</Link>
+      <Link to="/achievements">Достижения</Link>
+      <Link to="/rewards">Награды</Link>
+      <Link to="/loyalty">Система лояльности</Link>
+      <Link to="/faq">Часто задаваемые вопросы</Link>
+      <Link to="/profile">Личный кабинет</Link>
+    </nav>
+    <Link className="primary sidebar-profile-cta" to="/profile">
+      В личный кабинет
+    </Link>
+    <div className="auth-actions">
+      {!user && (
+        <>
+          <button className="primary" onClick={() => onOpenModal('register')}>
+            Регистрация
+          </button>
+          <button className="ghost" onClick={() => onOpenModal('register')}>
+            Войти
+          </button>
+        </>
+      )}
+      {user && (
+        <button className="ghost" onClick={onLogout}>
+          Выйти
+        </button>
+      )}
+    </div>
+    <div className="sidebar-note">
+      <p className="note-title">Найди свой маршрут</p>
+      <p className="note-text">
+        Собери первые 300 баллов за прогулку по центру и открой сезонные трофеи.
+      </p>
+    </div>
+    <Link className="ghost link-map" to="/map">
+      Открыть большую карту
+    </Link>
+    <Link className="ghost link-map" to="/admin/qr">
+      QR-админ
+    </Link>
+    <button className="theme-toggle" onClick={onToggleTheme}>
+      {theme === 'light' ? 'Темная тема' : 'Светлая тема'}
+    </button>
+  </aside>
+)
+
+const FullMapPage = ({
+  onSelectPoi,
+  userLocation,
+  locationStatus,
+  locationError,
+  autoCapturedIds,
+}) => {
   const navigate = useNavigate()
   return (
     <div className="map-page">
@@ -161,6 +276,7 @@ const FullMapPage = ({ onSelectPoi, userLocation, locationStatus, locationError 
           userLocation={userLocation}
           locationStatus={locationStatus}
           locationError={locationError}
+          autoCapturedIds={autoCapturedIds}
         />
       </div>
     </div>
@@ -170,86 +286,14 @@ const FullMapPage = ({ onSelectPoi, userLocation, locationStatus, locationError 
 const Home = ({
   onOpenModal,
   onSelectPoi,
-  onToggleTheme,
-  theme,
-  sidebarOpen,
-  onToggleSidebar,
-  user,
-  onLogout,
-  points,
-  level,
   userLocation,
   locationStatus,
   locationError,
+  autoCapturedIds,
 }) => {
   const navigate = useNavigate()
   return (
-    <div className={`app ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
-      <aside className="sidebar">
-        <button className="sidebar-toggle" onClick={onToggleSidebar}>
-          {sidebarOpen ? 'Свернуть' : 'Меню'}
-        </button>
-        <div className="account">
-          <div className="avatar" aria-hidden="true"></div>
-          <div className="account-info">
-            <p className="account-title">{user?.name || user?.email || 'Гость'}</p>
-            <p className="account-subtitle">
-              {user ? 'Профиль активен' : 'Рязань, на старте'}
-            </p>
-            <p className="account-level">
-              Уровень {level} · {formatNumber(points)} баллов
-            </p>
-          </div>
-        </div>
-        <nav className="menu">
-          <Link to="/routes">Экскурсии и квесты</Link>
-          <Link to="/kids">Детский аудиогид</Link>
-          <Link to="/cards">Коллекционные карточки</Link>
-          <Link to="/achievements">Достижения</Link>
-          <Link to="/rewards">Награды</Link>
-          <Link to="/loyalty">Система лояльности</Link>
-          <Link to="/faq">Часто задаваемые вопросы</Link>
-          <Link to="/profile">Личный кабинет</Link>
-        </nav>
-        <Link className="primary sidebar-profile-cta" to="/profile">
-          В личный кабинет
-        </Link>
-        <div className="auth-actions">
-          {!user && (
-            <>
-              <button className="primary" onClick={() => onOpenModal('register')}>
-                Регистрация
-              </button>
-              <button className="ghost" onClick={() => onOpenModal('register')}>
-                Войти
-              </button>
-            </>
-          )}
-          {user && (
-            <button className="ghost" onClick={onLogout}>
-              Выйти
-            </button>
-          )}
-        </div>
-        <div className="sidebar-note">
-          <p className="note-title">Найди свой маршрут</p>
-          <p className="note-text">
-            Собери первые 300 баллов за прогулку по центру и открой сезонные
-            трофеи.
-          </p>
-        </div>
-        <Link className="ghost link-map" to="/map">
-          Открыть большую карту
-        </Link>
-        <Link className="ghost link-map" to="/admin/qr">
-          QR-админ
-        </Link>
-        <button className="theme-toggle" onClick={onToggleTheme}>
-          {theme === 'light' ? 'Темная тема' : 'Светлая тема'}
-        </button>
-      </aside>
-
-      <main className="main">
+    <>
         <section id="home" className="hero">
           <div className="map-wrap">
             <div className="map-header">
@@ -278,6 +322,7 @@ const Home = ({
                 userLocation={userLocation}
                 locationStatus={locationStatus}
                 locationError={locationError}
+                autoCapturedIds={autoCapturedIds}
               />
               <div className="map-mask" aria-hidden="true"></div>
               <div className="map-legend">
@@ -390,13 +435,10 @@ const Home = ({
             <h2>Паспорт туриста</h2>
             <p>Чем больше открытых точек, тем выше статус и больше бонусов.</p>
           </header>
-          <div className="cards">
-            {['Новичок', 'Исследователь', 'Амбассадор'].map((title) => (
-              <article key={title} className="card">
-                <h3>{title}</h3>
-                <p>Условия и бонусы уровня появятся здесь.</p>
-              </article>
-            ))}
+          <div className="stamp-row">
+            <div className="stamp-slot" aria-label="Штамп 1"></div>
+            <div className="stamp-slot" aria-label="Штамп 2"></div>
+            <div className="stamp-slot" aria-label="Штамп 3"></div>
           </div>
         </section>
 
@@ -424,8 +466,7 @@ const Home = ({
             </article>
           </div>
         </section>
-      </main>
-    </div>
+    </>
   )
 }
 
@@ -452,6 +493,10 @@ function App() {
   const [locationStatus, setLocationStatus] = useState('idle')
   const [locationError, setLocationError] = useState(null)
   const [activeNarrator, setActiveNarrator] = useState(null)
+  const [scannedCards, setScannedCards] = useState(new Set())
+  const [capturedTerritories, setCapturedTerritories] = useState(new Set())
+  const audioRef = useRef(null)
+  const [purchasedRewards, setPurchasedRewards] = useState(new Set())
   const level = calculateLevel(points)
   const nextLevelAt = level * 500
   const pointsToNext = Math.max(nextLevelAt - points, 0)
@@ -571,6 +616,13 @@ function App() {
     setSelectedPoi(null)
     setAuthStatus(null)
     setAuthError(null)
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
+    }
   }
 
   const handleAuth = async () => {
@@ -635,6 +687,23 @@ function App() {
 
   const speakCharacter = (card, trigger) => {
     if (!card?.character?.text) return
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+    if (card.character.audio) {
+      const audio = new Audio(card.character.audio)
+      audioRef.current = audio
+      setActiveNarrator(`${card.id}:${trigger}`)
+      audio.onended = () => setActiveNarrator(null)
+      audio.onerror = () => {
+        setActiveNarrator(null)
+      }
+      audio.play().catch(() => {
+        setActiveNarrator(null)
+      })
+      return
+    }
     if (!('speechSynthesis' in window)) return
     window.speechSynthesis.cancel()
     const utterance = new SpeechSynthesisUtterance(card.character.text)
@@ -646,6 +715,62 @@ function App() {
     window.speechSynthesis.speak(utterance)
   }
 
+  const isPointInBounds = (coords, bounds) => {
+    const [lat, lng] = coords
+    const [[lat1, lng1], [lat2, lng2]] = bounds
+    const minLat = Math.min(lat1, lat2)
+    const maxLat = Math.max(lat1, lat2)
+    const minLng = Math.min(lng1, lng2)
+    const maxLng = Math.max(lng1, lng2)
+    return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng
+  }
+
+  const tryCaptureTerritory = (coords) => {
+    const territory = TERRITORIES.find((item) => isPointInBounds(coords, item.bounds))
+    if (!territory) return
+    setCapturedTerritories((prev) => {
+      if (prev.has(territory.id)) return prev
+      const next = new Set(prev)
+      next.add(territory.id)
+      return next
+    })
+  }
+
+  const getMatchedCard = (poi) => {
+    if (!poi) return null
+    const activeCards = GAME_CARDS.filter((card) => card.active)
+    if (!activeCards.length) return null
+    const poiName = normalizeName(poi.name)
+    const byName = activeCards.find((card) => normalizeName(card.title) === poiName)
+    if (byName) return byName
+    const byContains = activeCards.find((card) =>
+      poiName.includes(normalizeName(card.title)),
+    )
+    if (byContains) return byContains
+    const esenin = activeCards.find((card) =>
+      normalizeName(card.title).includes('есенин'),
+    )
+    if (esenin && (poiName.includes('есенин') || poiName.includes('yesenin'))) {
+      return esenin
+    }
+    if (!poi.coords) return null
+    let best = null
+    let bestDistance = Infinity
+    activeCards.forEach((card) => {
+      const dist = getDistanceMeters(
+        { lat: poi.coords[0], lng: poi.coords[1] },
+        { lat: card.coords[0], lng: card.coords[1] },
+      )
+      if (dist < bestDistance) {
+        bestDistance = dist
+        best = card
+      }
+    })
+    if (bestDistance <= 250) return best
+    if (DISABLE_GEO_CHECK) return best
+    return null
+  }
+
   const handleCheckIn = (card) => {
     if (collectedCards.has(card.id)) {
       setCheckinStatus((prev) => ({
@@ -654,17 +779,19 @@ function App() {
       }))
       return false
     }
-    if (!userLocation) {
+    if (!userLocation && !DISABLE_GEO_CHECK) {
       setCheckinStatus((prev) => ({
         ...prev,
         [card.id]: 'Включи геолокацию, чтобы отметить посещение.',
       }))
       return false
     }
-    const distance = getDistanceMeters(userLocation, {
-      lat: card.coords[0],
-      lng: card.coords[1],
-    })
+    const distance = DISABLE_GEO_CHECK
+      ? 0
+      : getDistanceMeters(userLocation, {
+          lat: card.coords[0],
+          lng: card.coords[1],
+        })
     if (distance <= card.radius) {
       setCollectedCards((prev) => {
         const next = new Set(prev)
@@ -676,6 +803,7 @@ function App() {
         ...prev,
         [card.id]: `Засчитано! +${card.points} баллов.`,
       }))
+      tryCaptureTerritory(card.coords)
       return true
     } else {
       setCheckinStatus((prev) => ({
@@ -687,21 +815,30 @@ function App() {
   }
 
   const handleQrScan = (card) => {
-    if (!userLocation) {
+    if (!userLocation && !DISABLE_GEO_CHECK) {
       setCheckinStatus((prev) => ({
         ...prev,
         [card.id]: 'Включи геолокацию, чтобы подтвердить QR.',
       }))
       return
     }
-    const distance = getDistanceMeters(userLocation, {
-      lat: card.coords[0],
-      lng: card.coords[1],
-    })
+    const distance = DISABLE_GEO_CHECK
+      ? 0
+      : getDistanceMeters(userLocation, {
+          lat: card.coords[0],
+          lng: card.coords[1],
+        })
     if (distance <= card.radius) {
+      setScannedCards((prev) => {
+        if (prev.has(card.id)) return prev
+        const next = new Set(prev)
+        next.add(card.id)
+        setPoints((pointsPrev) => pointsPrev + (card.qrPoints || 0))
+        return next
+      })
       setCheckinStatus((prev) => ({
         ...prev,
-        [card.id]: 'QR подтвержден. История активирована.',
+        [card.id]: `QR подтвержден. +${card.qrPoints || 0} баллов.`,
       }))
       speakCharacter(card, 'qr')
     } else {
@@ -714,8 +851,8 @@ function App() {
 
   const handlePoiCheckIn = () => {
     if (!selectedPoi) return
-    const matched = GAME_CARDS.find((item) => item.title === selectedPoi.name)
-    if (!matched) {
+    const matched = getMatchedCard(selectedPoi)
+    if (!matched || !matched.active) {
       setCheckinStatus((prev) => ({
         ...prev,
         [selectedPoi.id]: 'Эта точка пока без коллекционной карточки.',
@@ -731,168 +868,262 @@ function App() {
     }
   }
 
+  const handleBuyReward = (reward) => {
+    if (purchasedRewards.has(reward.id)) return
+    if (points < reward.cost) {
+      setCheckinStatus((prev) => ({
+        ...prev,
+        [reward.id]: 'Недостаточно баллов.',
+      }))
+      return
+    }
+    setPoints((prev) => prev - reward.cost)
+    setPurchasedRewards((prev) => {
+      const next = new Set(prev)
+      next.add(reward.id)
+      return next
+    })
+    setCheckinStatus((prev) => ({
+      ...prev,
+      [reward.id]: `Награда "${reward.title}" добавлена.`,
+    }))
+  }
+
+  const shellProps = {
+    onOpenModal: openModal,
+    onToggleTheme: toggleTheme,
+    theme,
+    sidebarOpen,
+    onToggleSidebar: () => setSidebarOpen((prev) => !prev),
+    user,
+    onLogout: handleLogout,
+    points,
+    level,
+  }
+
+  const Shell = ({ children }) => (
+    <div className={`app ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
+      <Sidebar {...shellProps} />
+      <main className="main">{children}</main>
+    </div>
+  )
+
   return (
     <Router>
       <Routes>
         <Route
           path="/"
           element={
-            <Home
-              onOpenModal={openModal}
-              onSelectPoi={handleSelectPoi}
-              onToggleTheme={toggleTheme}
-              theme={theme}
-              sidebarOpen={sidebarOpen}
-              onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
-              user={user}
-              onLogout={handleLogout}
-              points={points}
-              level={level}
-              userLocation={userLocation}
-              locationStatus={locationStatus}
-              locationError={locationError}
-            />
+            <Shell>
+              <Home
+                onOpenModal={openModal}
+                onSelectPoi={handleSelectPoi}
+                userLocation={userLocation}
+                locationStatus={locationStatus}
+                locationError={locationError}
+                autoCapturedIds={capturedTerritories}
+              />
+            </Shell>
           }
         />
         <Route
           path="/map"
           element={
-            <FullMapPage
-              onSelectPoi={handleSelectPoi}
-              userLocation={userLocation}
-              locationStatus={locationStatus}
-              locationError={locationError}
-            />
+            <Shell>
+              <FullMapPage
+                onSelectPoi={handleSelectPoi}
+                userLocation={userLocation}
+                locationStatus={locationStatus}
+                locationError={locationError}
+                autoCapturedIds={capturedTerritories}
+              />
+            </Shell>
           }
         />
-        <Route path="/admin/qr" element={<QRAdmin />} />
-        <Route path="/campaign/:code/" element={<CharacterWelcome />} />
+        <Route
+          path="/admin/qr"
+          element={
+            <Shell>
+              <QRAdmin />
+            </Shell>
+          }
+        />
+        <Route
+          path="/campaign/:code/"
+          element={
+            <Shell>
+              <CharacterWelcome />
+            </Shell>
+          }
+        />
         <Route
           path="/routes"
           element={
-            <PageShell
-              title="Экскурсии и квесты"
-              subtitle="Сюжетные маршруты, QR-точки и задания."
-            >
-              <div className="cards">
-                {['Исторический центр', 'Квест по музеям', 'Природные тропы'].map(
-                  (title) => (
-                    <article key={title} className="card">
-                      <h3>{title}</h3>
-                      <p>Описание маршрута появится здесь.</p>
-                    </article>
-                  ),
-                )}
-              </div>
-            </PageShell>
+            <Shell>
+              <PageShell
+                title="Экскурсии и квесты"
+                subtitle="Сюжетные маршруты, QR-точки и задания."
+              >
+                <div className="cards">
+                  {['Исторический центр', 'Квест по музеям', 'Природные тропы'].map(
+                    (title) => (
+                      <article key={title} className="card">
+                        <h3>{title}</h3>
+                        <p>Описание маршрута появится здесь.</p>
+                      </article>
+                    ),
+                  )}
+                </div>
+              </PageShell>
+            </Shell>
           }
         />
         <Route
           path="/cards"
           element={
-            <PageShell
-              title="Коллекционные карточки"
-              subtitle="Собирай карточки, отмечая посещение на карте."
-            >
-              <div className="cards collectibles">
-                {GAME_CARDS.map((card) => {
-                  const collected = collectedCards.has(card.id)
-                  return (
-                    <article key={card.id} className="card collectible-card">
-                      <img
-                        className="collectible-photo"
-                        src={card.image}
-                        alt={card.title}
-                        loading="lazy"
-                      />
-                      <div className="collectible-head">
-                        <h3>{card.title}</h3>
-                        <span className="collectible-points">
-                          +{card.points} баллов
-                        </span>
-                      </div>
-                      <p>{card.desc}</p>
-                      <p className="collectible-info">{card.info}</p>
-                      <div className="character-card">
-                        <div>
-                          <p className="character-name">{card.character.name}</p>
-                          <p className="character-text">{card.character.text}</p>
+            <Shell>
+              <PageShell
+                title="Коллекционные карточки"
+                subtitle="Собирай карточки, отмечая посещение на карте."
+              >
+                <div className="cards collectibles">
+                  {GAME_CARDS.map((card) => {
+                    const collected = collectedCards.has(card.id)
+                    return (
+                      <article key={card.id} className="card collectible-card">
+                        <img
+                          className="collectible-photo"
+                          src={card.image}
+                          alt={card.title}
+                          loading="lazy"
+                        />
+                        <div className="collectible-head">
+                          <h3>{card.title}</h3>
+                          <span className="collectible-points">
+                            +{card.points} баллов
+                          </span>
                         </div>
-                        <span className="character-chip">ИИ-персонаж</span>
-                      </div>
-                      <div className="card-tags">
-                        <span>{collected ? 'Собрано' : 'Ожидает посещения'}</span>
-                        <span>Радиус: {card.radius} м</span>
-                      </div>
-                    </article>
-                  )
-                })}
-              </div>
-            </PageShell>
+                        <p>{card.desc}</p>
+                        <p className="collectible-info">{card.info}</p>
+                        <div className="character-card">
+                          <div>
+                            <p className="character-name">{card.character.name}</p>
+                            <p className="character-text">{card.character.text}</p>
+                          </div>
+                          <span className="character-chip">ИИ-персонаж</span>
+                        </div>
+                        <div className="card-tags">
+                          <span>
+                            {card.active
+                              ? collected
+                                ? 'Собрано'
+                                : 'Ожидает посещения'
+                              : 'Скоро в игре'}
+                          </span>
+                          <span>Радиус: {card.radius} м</span>
+                        </div>
+                      </article>
+                    )
+                  })}
+                </div>
+              </PageShell>
+            </Shell>
           }
         />
         <Route
           path="/kids"
           element={
-            <PageShell
-              title="Детский аудиогид"
-              subtitle="Короткие маршруты и игровые истории для детей."
-            >
-              <div className="cards">
-                <article className="card">
-                  <h3>Маршрут для малышей</h3>
-                  <p>6 точек, 30–40 минут, QR-навигация.</p>
-                </article>
-                <article className="card">
-                  <h3>Мини‑тест в конце</h3>
-                  <p>3 вопроса по маршруту, +50 баллов.</p>
-                </article>
-              </div>
-            </PageShell>
+            <Shell>
+              <PageShell
+                title="Детский аудиогид"
+                subtitle="Короткие маршруты и игровые истории для детей."
+              >
+                <div className="cards">
+                  <article className="card">
+                    <h3>Маршрут для малышей</h3>
+                    <p>6 точек, 30–40 минут, QR-навигация.</p>
+                  </article>
+                  <article className="card">
+                    <h3>Мини‑тест в конце</h3>
+                    <p>3 вопроса по маршруту, +50 баллов.</p>
+                  </article>
+                </div>
+              </PageShell>
+            </Shell>
           }
         />
         <Route
           path="/achievements"
           element={
-            <PageShell
-              title="Достижения"
-              subtitle="Серии посещений, статусы и коллекции."
-            >
-              <div className="cards">
-                {['Первооткрыватель', 'Ночной исследователь', 'Летописец'].map(
-                  (title) => (
-                    <article key={title} className="card">
-                      <h3>{title}</h3>
-                      <p>Условие получения появится здесь.</p>
-                    </article>
-                  ),
-                )}
-              </div>
-            </PageShell>
+            <Shell>
+              <PageShell
+                title="Достижения"
+                subtitle="Серии посещений, статусы и коллекции."
+              >
+                <div className="cards">
+                  {['Первооткрыватель', 'Ночной исследователь', 'Летописец'].map(
+                    (title) => (
+                      <article key={title} className="card">
+                        <h3>{title}</h3>
+                        <p>Условие получения появится здесь.</p>
+                      </article>
+                    ),
+                  )}
+                </div>
+              </PageShell>
+            </Shell>
           }
         />
         <Route
           path="/rewards"
           element={
-            <PageShell title="Награды" subtitle="Список доступных призов и скидок.">
-              <div className="cards">
-                {['Кофе и выпечка', 'Прокат велосипедов', 'Сувениры'].map((title) => (
-                  <article key={title} className="card">
-                    <h3>{title}</h3>
-                    <p>Партнерские предложения появятся здесь.</p>
-                  </article>
-                ))}
-              </div>
-            </PageShell>
+            <Shell>
+              <PageShell
+                title="Награды"
+                subtitle="Список доступных призов и скидок."
+              >
+                <div className="cards">
+                  {REWARDS.filter((reward) => !purchasedRewards.has(reward.id)).map(
+                    (reward) => (
+                      <article key={reward.id} className="card">
+                        <h3>{reward.title}</h3>
+                        <p>Стоимость: {reward.cost} баллов.</p>
+                        <button
+                          className="primary"
+                          type="button"
+                          onClick={() => handleBuyReward(reward)}
+                          disabled={points < reward.cost}
+                        >
+                          Купить
+                        </button>
+                        {checkinStatus[reward.id] && (
+                          <p className="collectible-status">
+                            {checkinStatus[reward.id]}
+                          </p>
+                        )}
+                      </article>
+                    ),
+                  )}
+                  {REWARDS.filter((reward) => purchasedRewards.has(reward.id)).length ===
+                    0 && (
+                    <article className="card">
+                      <h3>Награды будут здесь</h3>
+                      <p>Собирай баллы, чтобы открыть покупки.</p>
+                    </article>
+                  )}
+                </div>
+              </PageShell>
+            </Shell>
           }
         />
         <Route
           path="/profile"
           element={
-            <PageShell
-              title="Личный кабинет"
-              subtitle="Ваш прогресс, достижения и настройки."
-            >
+            <Shell>
+              <PageShell
+                title="Личный кабинет"
+                subtitle="Ваш прогресс, достижения и настройки."
+              >
               <section className="profile-hero">
                 <div className="profile-card">
                   <div className="profile-avatar"></div>
@@ -997,6 +1228,27 @@ function App() {
               </section>
 
               <section className="profile-section">
+                <h3 className="section-title">Мои награды</h3>
+                {REWARDS.filter((reward) => purchasedRewards.has(reward.id)).length ===
+                0 ? (
+                  <p className="collectible-empty">
+                    Пока нет купленных наград. Загляни в раздел «Награды».
+                  </p>
+                ) : (
+                  <div className="cards">
+                    {REWARDS.filter((reward) => purchasedRewards.has(reward.id)).map(
+                      (reward) => (
+                        <article key={reward.id} className="card">
+                          <h3>{reward.title}</h3>
+                          <p>Оплачено: {reward.cost} баллов.</p>
+                        </article>
+                      ),
+                    )}
+                  </div>
+                )}
+              </section>
+
+              <section className="profile-section">
                 <h3 className="section-title">Настройки профиля и данных</h3>
                 <form className="profile-form">
                   <label>
@@ -1035,49 +1287,54 @@ function App() {
                   </div>
                 </form>
               </section>
-            </PageShell>
+              </PageShell>
+            </Shell>
           }
         />
         <Route
           path="/loyalty"
           element={
-            <PageShell
-              title="Система лояльности"
-              subtitle="Статусы туриста и уровни опыта."
-            >
-              <div className="cards">
-                {['Новичок', 'Исследователь', 'Амбассадор'].map((title) => (
-                  <article key={title} className="card">
-                    <h3>{title}</h3>
-                    <p>Условия и бонусы уровня появятся здесь.</p>
-                  </article>
-                ))}
-              </div>
-            </PageShell>
+            <Shell>
+              <PageShell
+                title="Система лояльности"
+                subtitle="Статусы туриста и уровни опыта."
+              >
+                <div className="cards">
+                  {['Новичок', 'Исследователь', 'Амбассадор'].map((title) => (
+                    <article key={title} className="card">
+                      <h3>{title}</h3>
+                      <p>Условия и бонусы уровня появятся здесь.</p>
+                    </article>
+                  ))}
+                </div>
+              </PageShell>
+            </Shell>
           }
         />
         <Route
           path="/faq"
           element={
-            <PageShell
-              title="FAQ"
-              subtitle="Ответы на частые вопросы о квестах и наградах."
-            >
-              <div className="faq">
-                <article>
-                  <h3>Как начисляются баллы?</h3>
-                  <p>Ответ появится после заполнения базы маршрутов.</p>
-                </article>
-                <article>
-                  <h3>Можно ли проходить маршруты без гида?</h3>
-                  <p>Да, будут доступны самостоятельные и групповые форматы.</p>
-                </article>
-                <article>
-                  <h3>Где получить призы?</h3>
-                  <p>Список партнеров появится в разделе лояльности.</p>
-                </article>
-              </div>
-            </PageShell>
+            <Shell>
+              <PageShell
+                title="FAQ"
+                subtitle="Ответы на частые вопросы о квестах и наградах."
+              >
+                <div className="faq">
+                  <article>
+                    <h3>Как начисляются баллы?</h3>
+                    <p>Ответ появится после заполнения базы маршрутов.</p>
+                  </article>
+                  <article>
+                    <h3>Можно ли проходить маршруты без гида?</h3>
+                    <p>Да, будут доступны самостоятельные и групповые форматы.</p>
+                  </article>
+                  <article>
+                    <h3>Где получить призы?</h3>
+                    <p>Список партнеров появится в разделе лояльности.</p>
+                  </article>
+                </div>
+              </PageShell>
+            </Shell>
           }
         />
       </Routes>
@@ -1178,18 +1435,17 @@ function App() {
             {modalType === 'poi' && selectedPoi && (
               <div className="modal-body">
                 {(() => {
-                  const matched = GAME_CARDS.find(
-                    (item) => item.title === selectedPoi.name,
-                  )
+                  const matched = getMatchedCard(selectedPoi)
                   const key = matched ? matched.id : selectedPoi.id
-                  const collected = matched ? collectedCards.has(matched.id) : false
+                  const collected =
+                    matched && matched.active ? collectedCards.has(matched.id) : false
                   return (
                     <>
                       <h3>{selectedPoi.name}</h3>
                       <p className="modal-subtitle">
                         История и информация из открытых источников.
                       </p>
-                      {matched && (
+                      {matched && matched.active && (
                         <>
                           <img
                             className="collectible-photo"
@@ -1221,32 +1477,38 @@ function App() {
                         <div className="qr-placeholder">QR</div>
                         <p>Сканируй QR, чтобы услышать историю персонажа.</p>
                       </div>
-                      <div className="collectible-actions">
-                        <button
-                          className="ghost"
-                          type="button"
-                          onClick={() =>
-                            matched &&
-                            handleQrScan({
-                              ...matched,
-                              coords: selectedPoi.coords || matched.coords,
-                            })
-                          }
-                          disabled={!matched}
-                        >
-                          Сканировать QR
-                        </button>
-                        <button
-                          className="primary"
-                          type="button"
-                          onClick={handlePoiCheckIn}
-                          disabled={collected || !matched}
-                        >
-                          {collected ? 'Уже собрано' : 'Я здесь!'}
-                        </button>
-                      </div>
+                        <div className="collectible-actions">
+                          <button
+                            className="ghost"
+                            type="button"
+                            onClick={() =>
+                              matched &&
+                              matched.active &&
+                              handleQrScan({
+                                ...matched,
+                                coords: selectedPoi.coords || matched.coords,
+                              })
+                            }
+                            disabled={!matched || !matched.active}
+                          >
+                            Сканировать QR
+                          </button>
+                          <button
+                            className="primary"
+                            type="button"
+                            onClick={handlePoiCheckIn}
+                            disabled={collected || !matched || !matched.active}
+                          >
+                            {collected ? 'Уже собрано' : 'Я здесь!'}
+                          </button>
+                        </div>
                       {activeNarrator?.startsWith(matched?.id || '') && (
                         <p className="collectible-status">Идёт озвучка персонажа…</p>
+                      )}
+                      {matched && !matched.active && (
+                        <p className="collectible-status">
+                          Эта карточка скоро появится в коллекции.
+                        </p>
                       )}
                       {checkinStatus[key] && (
                         <p className="collectible-status">{checkinStatus[key]}</p>

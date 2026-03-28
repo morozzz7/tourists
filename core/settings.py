@@ -85,7 +85,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'tourism',  # новая база
         'USER': 'postgres',
-        'PASSWORD': '123',
+        'PASSWORD': 'postgres',
         'HOST': 'localhost',
         'PORT': '5432',
         'OPTIONS': {'client_encoding': 'UTF8'}
