@@ -221,7 +221,7 @@ const FullMapPage = ({
     if (poiId && poiId !== openedPoiId) {
       const fetchAndOpenPoi = async () => {
         try {
-          const response = await fetch(`${API_BASE}/api/quests/pois/${poiId}/`)
+          const response = await fetch(`${API_BASE}/api/pois/${poiId}/`)
           const poiData = await response.json()
 
           const poiForModal = {

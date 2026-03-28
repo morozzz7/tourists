@@ -226,7 +226,6 @@ const RyazanMap = ({
   userLocation,
   locationStatus,
   locationError,
-  autoCapturedIds,
 }) => {
   const [locations, setLocations] = useState([])
   const [loading, setLoading] = useState(true)
@@ -238,13 +237,7 @@ const RyazanMap = ({
   const yandexMapRef = useRef(null)
 
   const [captured, setCaptured] = useState(new Set(['t1', 't3']))
-  const effectiveCaptured = new Set([
-    ...captured,
-    ...(autoCapturedIds ? Array.from(autoCapturedIds) : []),
-  ])
-  const progress = Math.round(
-    (effectiveCaptured.size / TERRITORIES.length) * 100,
-  )
+  const progress = Math.round((captured.size / TERRITORIES.length) * 100)
 
   useEffect(() => {
     const fetchPoi = async () => {
@@ -417,7 +410,6 @@ const RyazanMap = ({
 
     TERRITORIES.forEach((territory) => {
       const [[lat1, lon1], [lat2, lon2]] = territory.bounds
-      const isCaptured = effectiveCaptured.has(territory.id)
       const polygon = new window.ymaps.Polygon(
         [
           [
@@ -430,8 +422,8 @@ const RyazanMap = ({
         ],
         {},
         {
-          fillColor: isCaptured ? '#d62f2f55' : '#cccccc55',
-          strokeColor: isCaptured ? '#d62f2f' : '#999999',
+          fillColor: captured.has(territory.id) ? '#d62f2f55' : '#cccccc55',
+          strokeColor: captured.has(territory.id) ? '#d62f2f' : '#999999',
           strokeWidth: 2,
         },
       )
@@ -474,16 +466,7 @@ const RyazanMap = ({
       )
       map.geoObjects.add(userPlacemark)
     }
-  }, [
-    provider,
-    yandexReady,
-    locations,
-    captured,
-    autoCapturedIds,
-    onSelectPoi,
-    wikiById,
-    userLocation,
-  ])
+  }, [provider, yandexReady, locations, captured, onSelectPoi, wikiById, userLocation])
 
   const toggleCapture = (id) => {
     setCaptured((prev) => {
@@ -516,11 +499,9 @@ const RyazanMap = ({
               key={territory.id}
               bounds={territory.bounds}
               pathOptions={{
-                color: effectiveCaptured.has(territory.id) ? '#d62f2f' : '#999999',
-                fillColor: effectiveCaptured.has(territory.id)
-                  ? '#d62f2f'
-                  : '#cccccc',
-                fillOpacity: effectiveCaptured.has(territory.id) ? 0.35 : 0.15,
+                color: captured.has(territory.id) ? '#d62f2f' : '#999999',
+                fillColor: captured.has(territory.id) ? '#d62f2f' : '#cccccc',
+                fillOpacity: captured.has(territory.id) ? 0.35 : 0.15,
                 weight: 2,
               }}
               eventHandlers={{

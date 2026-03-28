@@ -18,8 +18,8 @@ export default function QRAdmin() {
       setFetchLoading(true);
       setError(null);
       try {
-        console.log('🔍 Запрос к:', `${BASE_URL}/api/quests/pois/`);
-        const res = await axios.get(`${BASE_URL}/api/quests/pois/`, {
+        console.log('🔍 Запрос к:', `${BASE_URL}/api/pois/`);
+        const res = await axios.get(`${BASE_URL}/api/pois/`, {
           timeout: 10000,
           headers: {
             'Content-Type': 'application/json',
@@ -73,7 +73,7 @@ export default function QRAdmin() {
     try {
       console.log('🎯 Генерация QR для POI:', selectedPoi);
       const res = await axios.post(
-        `${BASE_URL}/api/quests/pois/${selectedPoi}/generate_qr/`,
+        `${BASE_URL}/api/pois/${selectedPoi}/generate_qr/`,
         {},
         {
           timeout: 30000,

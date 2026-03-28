@@ -17,7 +17,7 @@ export default function PoiWelcome() {
   useEffect(() => {
     const fetchPoi = async () => {
       try {
-        const response = await axios.get(`${API_BASE}/api/quests/qr-by-code/`, {
+        const response = await axios.get(`${API_BASE}/api/qr-by-code/`, {
           params: { code }
         });
         setPoi(response.data);
@@ -35,8 +35,8 @@ export default function PoiWelcome() {
     // Здесь нужно реализовать логику проверки геолокации и начисления баллов
     // Аналогично handleCheckIn в App.jsx, но с запросами к API
     try {
-      const response = await axios.post(`${API_BASE}/api/quests/poi-checkin/`, {
-        poi_id: poi.id
+      const response = await axios.post(`${API_BASE}/api/poi-checkin-by-qr/`, {
+        code: code
       }, { withCredentials: true });
       setCheckinStatus(response.data.message);
     } catch (err) {

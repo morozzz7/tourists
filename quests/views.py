@@ -54,14 +54,13 @@ class PointOfInterestViewSet(viewsets.ModelViewSet):
         img_base64 = base64.b64encode(buffer.getvalue()).decode()
 
         qr_link = POIQRCode.objects.create(poi=poi, code=code)
-        POIQRCode.objects.create(poi=poi, code=code)
+        
         return Response({
             'code': code,
             'url': qr_url,
             'image': f'data:image/png;base64,{img_base64}',
             'poi_title': poi.title,  # ← добавили название
         })
-
 
 @api_view(["GET"])
 def poi_by_qr_code(request):
