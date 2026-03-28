@@ -75,7 +75,8 @@ const GAME_CARDS = [
     points: 90,
     qrPoints: 25,
     radius: 140,
-    image: '/images/esenin.jpg',
+    image:
+      '/images/%D0%BF%D0%B0%D0%BC%D1%8F%D1%82%D0%BD%D0%B8%D0%BA%D0%B5%D1%81%D0%B5%D0%BD%D0%B8%D0%BD%D1%83.jpg',
     character: {
       name: 'Сергей Есенин',
       text: 'Ты здесь — и строки оживают. Вдохни воздух Оки и запомни этот вид.',
@@ -812,7 +813,9 @@ function App() {
         ...prev,
         [card.id]: `QR подтвержден. +${card.qrPoints || 0} баллов.`,
       }))
-      speakCharacter(card, 'qr')
+      if (card.id !== 'poi-esenin') {
+        speakCharacter(card, 'qr')
+      }
     } else {
       setCheckinStatus((prev) => ({
         ...prev,

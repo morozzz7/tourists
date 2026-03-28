@@ -1,0 +1,58 @@
+.talking-guide2d {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  --guide-shadow: 0 20px 50px rgba(45, 58, 92, 0.35);
+}
+
+.talking-guide2d__svg {
+  width: min(220px, 55vw);
+  height: auto;
+  max-height: 280px;
+  filter: drop-shadow(var(--guide-shadow));
+  transform-origin: center bottom;
+  transition: transform 0.35s ease;
+}
+
+.talking-guide2d--speaking .talking-guide2d__svg {
+  animation: guideBreathe 2.2s ease-in-out infinite;
+}
+
+@keyframes guideBreathe {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-6px) scale(1.02);
+  }
+}
+
+.talking-guide2d__mouth {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.12s ease;
+}
+
+.talking-guide2d--speaking .talking-guide2d__mouth {
+  animation: mouthTalk 0.22s ease-in-out infinite alternate;
+}
+
+@keyframes mouthTalk {
+  from {
+    transform: scaleY(0.35);
+  }
+  to {
+    transform: scaleY(1.35);
+  }
+}
+
+.talking-guide2d__caption {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e1b4b;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
