@@ -76,7 +76,7 @@ const GAME_CARDS = [
     qrPoints: 25,
     radius: 140,
     image:
-      '/images/%D0%BF%D0%B0%D0%BC%D1%8F%D1%82%D0%BD%D0%B8%D0%BA%D0%B5%D1%81%D0%B5%D0%BD%D0%B8%D0%BD%D1%83.jpg',
+      '/images/esenin.jpg',
     character: {
       name: 'Сергей Есенин',
       text: 'Ты здесь — и строки оживают. Вдохни воздух Оки и запомни этот вид.',
@@ -933,9 +933,9 @@ function App() {
   const activeRoutePath =
     userLocation && activeRouteStops.length
       ? [
-          [userLocation.lat, userLocation.lng],
-          ...activeRouteStops.map((stop) => stop.coords),
-        ]
+        [userLocation.lat, userLocation.lng],
+        ...activeRouteStops.map((stop) => stop.coords),
+      ]
       : []
 
   useEffect(() => {
@@ -1437,10 +1437,10 @@ function App() {
                 subtitle="Сюжетные маршруты, QR-точки и задания."
               >
                 <div className="cards">
-          {ROUTES.filter((route) => !completedRoutes.has(route.id)).map((route) => (
-            <article key={route.id} className="card route-card">
-              <h3>{route.title}</h3>
-              <p>{route.subtitle}</p>
+                  {ROUTES.filter((route) => !completedRoutes.has(route.id)).map((route) => (
+                    <article key={route.id} className="card route-card">
+                      <h3>{route.title}</h3>
+                      <p>{route.subtitle}</p>
                       <div className="card-tags">
                         <span>
                           {route.stops.filter((stop) => stop.inRoute).length} точек
@@ -1454,8 +1454,8 @@ function App() {
                       >
                         Подробнее
                       </button>
-            </article>
-          ))}
+                    </article>
+                  ))}
                 </div>
               </PageShell>
             </Shell>
@@ -1647,7 +1647,7 @@ function App() {
                   <h3 className="section-title">Пройденные маршруты</h3>
                   <div className="cards">
                     {ROUTES.filter((route) => completedRoutes.has(route.id)).length ===
-                    0 ? (
+                      0 ? (
                       <p className="collectible-empty">
                         Пока нет завершённых маршрутов.
                       </p>
