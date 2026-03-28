@@ -966,13 +966,13 @@ function App() {
         const last = lastGeoRef.current
         const lastTs = lastGeoTsRef.current
         const movedEnough =
-          !last || getDistanceMeters(last, nextLocation) >= 25
-        const timeEnough = now - lastTs >= 15000
+          !last || getDistanceMeters(last, nextLocation) >= 100
+        const timeEnough = now - lastTs >= 60000
         if (!last || movedEnough || timeEnough) {
           lastGeoRef.current = nextLocation
           lastGeoTsRef.current = now
           setUserLocation(nextLocation)
-          setLocationStatus('ready')
+          setLocationStatus((prev) => (prev === 'ready' ? prev : 'ready'))
           setLocationError(null)
         }
       },
@@ -981,9 +981,9 @@ function App() {
         setLocationError(err.message || 'Ошибка геолокации')
       },
       {
-        enableHighAccuracy: true,
-        maximumAge: 10000,
-        timeout: 10000,
+        enableHighAccuracy: false,
+        maximumAge: 60000,
+        timeout: 15000,
       },
     )
     return () => navigator.geolocation.clearWatch(watchId)
