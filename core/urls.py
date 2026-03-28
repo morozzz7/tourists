@@ -22,7 +22,12 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    # Основной API (используется фронтом)
     path('api/', include('quests.urls')),
+    # Existing routes (без префикса) остаются, чтобы не ломать старые ссылки
+    path('', include('quests.urls')),
+    # Дополнительный префикс для совместимости с историческими ссылками
+    path('api/quests/', include('quests.urls')),
 ]
 
 if settings.DEBUG:

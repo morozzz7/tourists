@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   MapContainer,
   TileLayer,
@@ -6,6 +6,7 @@ import {
   Popup,
   Rectangle,
   CircleMarker,
+  Polyline,
 } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
@@ -171,7 +172,6 @@ const runWithConcurrency = async (items, limit, handler) => {
   const workers = Array.from({ length: limit }, async () => {
     while (queue.length) {
       const item = queue.shift()
-      // eslint-disable-next-line no-await-in-loop
       await handler(item)
     }
   })
@@ -226,18 +226,32 @@ const RyazanMap = ({
   userLocation,
   locationStatus,
   locationError,
+  autoCapturedIds,
+  routeStops = [],
+  routePath = [],
 }) => {
   const [locations, setLocations] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [provider, setProvider] = useState('leaflet')
+  const [provider, setProvider] = useState('yandex')
   const [wikiById, setWikiById] = useState({})
   const [yandexReady, setYandexReady] = useState(false)
   const yandexContainerRef = useRef(null)
   const yandexMapRef = useRef(null)
 
   const [captured, setCaptured] = useState(new Set(['t1', 't3']))
-  const progress = Math.round((captured.size / TERRITORIES.length) * 100)
+  const effectiveCaptured = useMemo(
+    () =>
+      new Set([
+        ...captured,
+        ...(autoCapturedIds ? Array.from(autoCapturedIds) : []),
+      ]),
+    [captured, autoCapturedIds],
+  )
+  const progress = Math.round(
+    (effectiveCaptured.size / TERRITORIES.length) * 100,
+  )
+  const routeLinePoints = routePath.filter((point) => Array.isArray(point))
 
   useEffect(() => {
     const fetchPoi = async () => {
@@ -306,7 +320,7 @@ const RyazanMap = ({
           writePoiCache(normalized)
           setError(null)
         }
-      } catch (err) {
+      } catch {
         const cached = readPoiCache({ allowStale: true })
         if (cached) {
           setLocations(cached)
@@ -400,6 +414,9 @@ const RyazanMap = ({
     }
   }, [provider])
 
+  // OSRM routing intentionally disabled due to performance issues.
+  // To re-enable, restore the OSRM fetch effect here.
+
   useEffect(() => {
     if (provider !== 'yandex') return
     if (!yandexReady) return
@@ -461,12 +478,59 @@ const RyazanMap = ({
           balloonContent: 'Вы здесь',
         },
         {
-          preset: 'islands#blueCircleDotIcon',
+          iconLayout: 'default#image',
+          iconImageHref: '/iam.ico',
+          iconImageSize: [64, 75],
+          iconImageOffset: [-16, -16],
         },
       )
       map.geoObjects.add(userPlacemark)
     }
-  }, [provider, yandexReady, locations, captured, onSelectPoi, wikiById, userLocation])
+
+    if (routeLinePoints.length > 1) {
+      const multiRoute = new window.ymaps.multiRouter.MultiRoute(
+        {
+          referencePoints: routeLinePoints,
+          params: {
+            results: 1,
+          },
+        },
+        {
+          boundsAutoApply: false,
+          routeActiveStrokeColor: '#d12f2f',
+          routeActiveStrokeWidth: 5,
+          routeActiveStrokeOpacity: 0.9,
+        },
+      )
+      map.geoObjects.add(multiRoute)
+    }
+
+    routeStops.forEach((stop) => {
+      if (!Array.isArray(stop.coords)) return
+      const placemark = new window.ymaps.Placemark(
+        stop.coords,
+        {
+          balloonContent: `<strong>Маршрутная точка</strong><br/>${escapeHtml(
+            stop.name,
+          )}<br/>${escapeHtml(stop.address || '')}`,
+        },
+        {
+          preset: 'islands#orangeCircleDotIcon',
+        },
+      )
+      map.geoObjects.add(placemark)
+    })
+  }, [
+    provider,
+    yandexReady,
+    locations,
+    effectiveCaptured,
+    onSelectPoi,
+    wikiById,
+    userLocation,
+    routeStops,
+    routeLinePoints,
+  ])
 
   const toggleCapture = (id) => {
     setCaptured((prev) => {
@@ -535,18 +599,45 @@ const RyazanMap = ({
               </Popup>
             </Marker>
           ))}
+          {routeLinePoints.length > 1 && (
+            <Polyline
+              positions={routeLinePoints}
+              pathOptions={{ color: '#d12f2f', weight: 4, opacity: 0.9 }}
+            />
+          )}
+          {routeStops.map((stop) =>
+            Array.isArray(stop.coords) ? (
+              <CircleMarker
+                key={stop.id}
+                center={stop.coords}
+                radius={8}
+                pathOptions={{
+                  color: '#ff7a00',
+                  fillColor: '#ffb347',
+                  fillOpacity: 0.95,
+                  weight: 2,
+                }}
+              >
+                <Popup>
+                  <strong>Маршрутная точка</strong>
+                  <div>{stop.name}</div>
+                  <div>{stop.address}</div>
+                </Popup>
+              </CircleMarker>
+            ) : null,
+          )}
           {userLocation && (
-            <CircleMarker
-              center={[userLocation.lat, userLocation.lng]}
-              radius={9}
-              pathOptions={{
-                color: '#1d7be8',
-                fillColor: '#3ea0ff',
-                fillOpacity: 0.8,
-              }}
+            <Marker
+              position={[userLocation.lat, userLocation.lng]}
+              icon={L.icon({
+                iconUrl: '/iam.ico',
+                iconSize: [32, 32],
+                iconAnchor: [16, 16],
+                popupAnchor: [0, -14],
+              })}
             >
               <Popup>Вы здесь</Popup>
-            </CircleMarker>
+            </Marker>
           )}
         </MapContainer>
       )}

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   MapContainer,
   TileLayer,
@@ -171,7 +171,6 @@ const runWithConcurrency = async (items, limit, handler) => {
   const workers = Array.from({ length: limit }, async () => {
     while (queue.length) {
       const item = queue.shift()
-      // eslint-disable-next-line no-await-in-loop
       await handler(item)
     }
   })
@@ -238,10 +237,14 @@ const RyazanMap = ({
   const yandexMapRef = useRef(null)
 
   const [captured, setCaptured] = useState(new Set(['t1', 't3']))
-  const effectiveCaptured = new Set([
-    ...captured,
-    ...(autoCapturedIds ? Array.from(autoCapturedIds) : []),
-  ])
+  const effectiveCaptured = useMemo(
+    () =>
+      new Set([
+        ...captured,
+        ...(autoCapturedIds ? Array.from(autoCapturedIds) : []),
+      ]),
+    [captured, autoCapturedIds],
+  )
   const progress = Math.round(
     (effectiveCaptured.size / TERRITORIES.length) * 100,
   )
@@ -313,7 +316,7 @@ const RyazanMap = ({
           writePoiCache(normalized)
           setError(null)
         }
-      } catch (err) {
+      } catch {
         const cached = readPoiCache({ allowStale: true })
         if (cached) {
           setLocations(cached)
@@ -439,7 +442,7 @@ const RyazanMap = ({
       map.geoObjects.add(polygon)
     })
 
-    displayLocations.forEach((loc) => {
+    locations.forEach((loc) => {
       const wiki = wikiById[loc.id]
       const title = escapeHtml(wiki?.title || loc.name)
       const desc = escapeHtml(wiki?.extract || loc.tags?.address || loc.tags?.menu || 'Точка маршрута')
@@ -478,8 +481,7 @@ const RyazanMap = ({
     provider,
     yandexReady,
     locations,
-    captured,
-    autoCapturedIds,
+    effectiveCaptured,
     onSelectPoi,
     wikiById,
     userLocation,
