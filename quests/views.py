@@ -18,6 +18,7 @@ import urllib.parse
 import json
 from .models import QRCampaign, QRCodeLink
 from .serializers import QRCampaignSerializer, QRCodeLinkSerializer
+from django.conf import settings
 
 
 class QRCampaignViewSet(viewsets.ModelViewSet):
@@ -35,14 +36,14 @@ class QRCampaignViewSet(viewsets.ModelViewSet):
         for i in range(quantity):
             code = f"{str(campaign.id).replace('-', '')[:8]}{i:04d}"
             full_url = request.build_absolute_uri(f"/campaign/{code}/")
-
+            qr_url = f"{settings.FRONTEND_URL}/welcome/{code}"
             qr = qrcode.QRCode(
                 version=1,
                 error_correction=qrcode.constants.ERROR_CORRECT_H,
                 box_size=10,
                 border=4,
             )
-            qr.add_data(full_url)
+            qr.add_data(qr_url)
             qr.make(fit=True)
 
             img = qr.make_image(fill_color="black", back_color="white")
@@ -59,7 +60,7 @@ class QRCampaignViewSet(viewsets.ModelViewSet):
                 {
                     "id": str(qr_link.id),
                     "code": code,
-                    "url": full_url,
+                    "url": qr_url,
                     "image": f"data:image/png;base64,{img_base64}",
                 }
             )

@@ -14,7 +14,8 @@ export default function QRAdmin() {
   const [error, setError] = useState(null); // Добавляем состояние для отображения ошибки
 
   // !!! ВАЖНО: Замените на URL вашего бэкенда !!!
-  const BASE_URL = 'http://localhost:8000'; // Пример: 'http://localhost:8000' или 'https://your-backend-api.com'
+  const BASE_URL = 'http://localhost:8000'; // Изменено на порт 5173
+  const FRONTEND_BASE_URL = 'http://localhost:5173';
 
   const characters = [
     'Робот', 'Инопланетянин', 'Динозавр',

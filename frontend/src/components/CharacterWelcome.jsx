@@ -10,12 +10,12 @@ export default function CharacterWelcome() {
   const [error, setError] = useState(null);
   const [animation, setAnimation] = useState(false);
 
-  const BASE_URl = 'http://localhost:8000'
+  const BASE_URL = 'http://localhost:8000'; // API-бэкенд
 
   useEffect(() => {
     const fetchCampaign = async () => {
       try {
-        const response = await axios.get('/api/quests/qr-codes/by_code/', {
+        const response = await axios.get(`${BASE_URL}/api/quests/qr-codes/by_code/`, {
           params: { code }
         });
         
