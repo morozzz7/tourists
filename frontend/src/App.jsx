@@ -6,6 +6,7 @@ import CharacterWelcome from './components/CharacterWelcome'
 import mascotImg from './assets/hero.png'
 import './App.css'
 
+
 const demoMessages = [
   {
     from: 'assistant',

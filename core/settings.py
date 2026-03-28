@@ -8,6 +8,11 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
+# os.environ['PGCLIENTENCODING'] = 'UTF8'
+# os.environ['LANG'] = 'en_US.UTF-8'
+# os.environ['LC_ALL'] = 'en_US.UTF-8'
+# os.environ['PYTHONIOENCODING'] = 'UTF-8'
+
 load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -42,8 +47,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',   # должен быть перед CommonMiddleware
+    'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -77,14 +82,14 @@ WSGI_APPLICATION = 'core.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'tourism'),
-        'USER': os.getenv('DB_USER', 'postgres'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'postgres'),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '5432'),
+        'NAME': 'tourism',  # новая база
+        'USER': 'postgres',
+        'PASSWORD': '123',
+        'HOST': 'localhost',
+        'PORT': '5432',
+        'OPTIONS': {'client_encoding': 'UTF8'}
     }
 }
-
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -129,11 +134,35 @@ REST_FRAMEWORK = {
 
 # CORS — разрешаем фронтенд на Vite dev сервере
 CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
     'http://localhost:5173',
     'http://127.0.0.1:5173',
+    "http://127.0.0.1:5173",
+]
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
 ]
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken', # Если вы все же отправляете CSRF токен через заголовки
+    'x-requested-with',
+]
+
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
 ]

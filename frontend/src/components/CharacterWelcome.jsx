@@ -10,6 +10,8 @@ export default function CharacterWelcome() {
   const [error, setError] = useState(null);
   const [animation, setAnimation] = useState(false);
 
+  const BASE_URl = 'http://localhost:8000'
+
   useEffect(() => {
     const fetchCampaign = async () => {
       try {

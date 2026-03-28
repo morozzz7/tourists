@@ -54,3 +54,6 @@ pnpm-debug.log*
 .pnp.js
 dist/
 build/
+
+# parols
+core/settings.py
