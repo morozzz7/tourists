@@ -913,6 +913,8 @@ function App() {
   const [userLocation, setUserLocation] = useState(null)
   const [locationStatus, setLocationStatus] = useState('idle')
   const [locationError, setLocationError] = useState(null)
+  const lastGeoRef = useRef(null)
+  const lastGeoTsRef = useRef(0)
   const [activeNarrator, setActiveNarrator] = useState(null)
   const [_scannedCards, setScannedCards] = useState(new Set())
   const [capturedTerritories, setCapturedTerritories] = useState(new Set())
@@ -955,13 +957,24 @@ function App() {
     setLocationStatus('requesting')
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
-        setUserLocation({
+        const nextLocation = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
           accuracy: position.coords.accuracy,
-        })
-        setLocationStatus('ready')
-        setLocationError(null)
+        }
+        const now = Date.now()
+        const last = lastGeoRef.current
+        const lastTs = lastGeoTsRef.current
+        const movedEnough =
+          !last || getDistanceMeters(last, nextLocation) >= 25
+        const timeEnough = now - lastTs >= 15000
+        if (!last || movedEnough || timeEnough) {
+          lastGeoRef.current = nextLocation
+          lastGeoTsRef.current = now
+          setUserLocation(nextLocation)
+          setLocationStatus('ready')
+          setLocationError(null)
+        }
       },
       (err) => {
         setLocationStatus(err.code === 1 ? 'denied' : 'error')
