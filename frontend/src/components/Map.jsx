@@ -1,5 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, Rectangle } from 'react-leaflet'
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  Rectangle,
+  CircleMarker,
+} from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 
@@ -214,7 +221,12 @@ const loadYandexMaps = (apiKey) => {
   return yandexLoaderPromise
 }
 
-const RyazanMap = ({ onSelectPoi }) => {
+const RyazanMap = ({
+  onSelectPoi,
+  userLocation,
+  locationStatus,
+  locationError,
+}) => {
   const [locations, setLocations] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -441,7 +453,20 @@ const RyazanMap = ({ onSelectPoi }) => {
       placemark.events.add('click', () => onSelectPoi?.(loc))
       map.geoObjects.add(placemark)
     })
-  }, [provider, yandexReady, locations, captured, onSelectPoi, wikiById])
+
+    if (userLocation) {
+      const userPlacemark = new window.ymaps.Placemark(
+        [userLocation.lat, userLocation.lng],
+        {
+          balloonContent: 'Вы здесь',
+        },
+        {
+          preset: 'islands#blueCircleDotIcon',
+        },
+      )
+      map.geoObjects.add(userPlacemark)
+    }
+  }, [provider, yandexReady, locations, captured, onSelectPoi, wikiById, userLocation])
 
   const toggleCapture = (id) => {
     setCaptured((prev) => {
@@ -510,6 +535,19 @@ const RyazanMap = ({ onSelectPoi }) => {
               </Popup>
             </Marker>
           ))}
+          {userLocation && (
+            <CircleMarker
+              center={[userLocation.lat, userLocation.lng]}
+              radius={9}
+              pathOptions={{
+                color: '#1d7be8',
+                fillColor: '#3ea0ff',
+                fillOpacity: 0.8,
+              }}
+            >
+              <Popup>Вы здесь</Popup>
+            </CircleMarker>
+          )}
         </MapContainer>
       )}
 
@@ -557,6 +595,17 @@ const RyazanMap = ({ onSelectPoi }) => {
         </p>
         {loading && <p className="map-overlay-status">Загрузка точек...</p>}
         {error && <p className="map-overlay-status">{error}</p>}
+        {locationStatus === 'denied' && (
+          <p className="map-overlay-status">Геолокация отключена в браузере.</p>
+        )}
+        {locationStatus === 'requesting' && (
+          <p className="map-overlay-status">Определяем ваше местоположение…</p>
+        )}
+        {locationStatus === 'error' && (
+          <p className="map-overlay-status">
+            Не удалось определить позицию{locationError ? `: ${locationError}` : '.'}
+          </p>
+        )}
       </div>
     </div>
   )

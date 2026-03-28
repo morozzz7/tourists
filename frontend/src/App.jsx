@@ -16,6 +16,109 @@ const demoMessages = [
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
 
+const formatNumber = (value) => value.toLocaleString('ru-RU')
+const calculateLevel = (points) => Math.floor(points / 500) + 1
+const toRadians = (value) => (value * Math.PI) / 180
+const getDistanceMeters = (from, to) => {
+  const R = 6371000
+  const dLat = toRadians(to.lat - from.lat)
+  const dLon = toRadians(to.lng - from.lng)
+  const lat1 = toRadians(from.lat)
+  const lat2 = toRadians(to.lat)
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(a))
+}
+
+const GAME_CARDS = [
+  {
+    id: 'poi-kremlin',
+    title: 'Рязанский Кремль',
+    desc: 'Собери карту кремля и открой историческую хронику.',
+    info:
+      'Главный исторический комплекс города с соборами, колокольней и панорамой на Оку.',
+    coords: [54.6348, 39.7486],
+    points: 120,
+    radius: 160,
+    image: 'https://picsum.photos/seed/ryazan-kremlin/900/600',
+    character: {
+      name: 'Гид Федот',
+      text:
+        'Добро пожаловать в сердце древней Рязани! Посмотри вверх — колокольня хранит сотни лет историй.',
+      voice: { rate: 1, pitch: 0.9 },
+    },
+  },
+  {
+    id: 'poi-esenin',
+    title: 'Памятник Есенину',
+    desc: 'Слушай стихи, чтобы открыть редкую карточку.',
+    info:
+      'Монумент поэту у набережной — любимая точка прогулок и городских маршрутов.',
+    coords: [54.636, 39.747],
+    points: 90,
+    radius: 140,
+    image: 'https://picsum.photos/seed/ryazan-esenin/900/600',
+    character: {
+      name: 'Муза Лада',
+      text:
+        'Ты здесь — и строки оживают. Вдохни воздух Оки и запомни этот вид.',
+      voice: { rate: 1.05, pitch: 1.2 },
+    },
+  },
+  {
+    id: 'poi-mushrooms',
+    title: 'Грибы с глазами',
+    desc: 'Найди арт-объект и получи бонус за фото.',
+    info:
+      'Городская легенда и любимое место для фото: улыбчивые грибы охраняют район.',
+    coords: [54.6288, 39.7345],
+    points: 70,
+    radius: 120,
+    image: 'https://picsum.photos/seed/ryazan-mushrooms/900/600',
+    character: {
+      name: 'Буба',
+      text:
+        'Эти грибы с глазами знают все тайные тропы. Сделай фото и получи дружескую улыбку!',
+      voice: { rate: 0.95, pitch: 1.15 },
+    },
+  },
+  {
+    id: 'poi-theatre',
+    title: 'Рязанский театр драмы',
+    desc: 'Подними занавес, чтобы открыть городскую сцену.',
+    info:
+      'Один из старейших театров региона, где каждый сезон звучат премьеры и классика.',
+    coords: [54.6322, 39.7325],
+    points: 110,
+    radius: 150,
+    image: 'https://picsum.photos/seed/ryazan-theatre/900/600',
+    character: {
+      name: 'Режиссер Аркадий',
+      text:
+        'Свет рампы уже близко! Представь, как здесь звучит аплодисмент после премьеры.',
+      voice: { rate: 0.98, pitch: 0.85 },
+    },
+  },
+  {
+    id: 'poi-pedestrian',
+    title: 'Почтовая улица',
+    desc: 'Найди тайный знак на пешеходной улице.',
+    info:
+      'Главная прогулочная улица с кофейнями, музыкой и ярмарками в сезон.',
+    coords: [54.6299, 39.7378],
+    points: 80,
+    radius: 130,
+    image: 'https://picsum.photos/seed/ryazan-street/900/600',
+    character: {
+      name: 'Курьер Сева',
+      text:
+        'Быстрый маршрут готов! Слушай шум улицы и собирай отметки на пути.',
+      voice: { rate: 1.1, pitch: 1.0 },
+    },
+  },
+]
+
 const getCookie = (name) => {
   const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'))
   return match ? decodeURIComponent(match[2]) : null
@@ -38,7 +141,7 @@ const PageShell = ({ title, subtitle, children }) => (
   </div>
 )
 
-const FullMapPage = ({ onSelectPoi }) => {
+const FullMapPage = ({ onSelectPoi, userLocation, locationStatus, locationError }) => {
   const navigate = useNavigate()
   return (
     <div className="map-page">
@@ -53,7 +156,12 @@ const FullMapPage = ({ onSelectPoi }) => {
         </button>
       </div>
       <div className="map-page-body">
-        <RyazanMap onSelectPoi={onSelectPoi} />
+        <RyazanMap
+          onSelectPoi={onSelectPoi}
+          userLocation={userLocation}
+          locationStatus={locationStatus}
+          locationError={locationError}
+        />
       </div>
     </div>
   )
@@ -68,6 +176,11 @@ const Home = ({
   onToggleSidebar,
   user,
   onLogout,
+  points,
+  level,
+  userLocation,
+  locationStatus,
+  locationError,
 }) => {
   const navigate = useNavigate()
   return (
@@ -83,17 +196,24 @@ const Home = ({
             <p className="account-subtitle">
               {user ? 'Профиль активен' : 'Рязань, на старте'}
             </p>
+            <p className="account-level">
+              Уровень {level} · {formatNumber(points)} баллов
+            </p>
           </div>
         </div>
         <nav className="menu">
           <Link to="/routes">Экскурсии и квесты</Link>
           <Link to="/kids">Детский аудиогид</Link>
+          <Link to="/cards">Коллекционные карточки</Link>
           <Link to="/achievements">Достижения</Link>
           <Link to="/rewards">Награды</Link>
           <Link to="/loyalty">Система лояльности</Link>
           <Link to="/faq">Часто задаваемые вопросы</Link>
           <Link to="/profile">Личный кабинет</Link>
         </nav>
+        <Link className="primary sidebar-profile-cta" to="/profile">
+          В личный кабинет
+        </Link>
         <div className="auth-actions">
           {!user && (
             <>
@@ -153,7 +273,12 @@ const Home = ({
               <button className="map-full-btn" onClick={() => navigate('/map')}>
                 На весь экран
               </button>
-              <RyazanMap onSelectPoi={onSelectPoi} />
+              <RyazanMap
+                onSelectPoi={onSelectPoi}
+                userLocation={userLocation}
+                locationStatus={locationStatus}
+                locationError={locationError}
+              />
               <div className="map-mask" aria-hidden="true"></div>
               <div className="map-legend">
                 <span className="legend-dot"></span>
@@ -243,27 +368,6 @@ const Home = ({
           </div>
         </section>
 
-        <section id="achievements" className="page">
-          <header>
-            <p className="eyebrow">Достижения</p>
-            <h2>Коллекция наград</h2>
-            <p>
-              Раздел для медалей, серий посещений и особых статусов — пока
-              макет.
-            </p>
-          </header>
-          <div className="cards achievements">
-            {['Первооткрыватель', 'Ночной исследователь', 'Летописец'].map(
-              (title) => (
-                <article key={title} className="card">
-                  <h3>{title}</h3>
-                  <p>Условие получения появится здесь.</p>
-                </article>
-              ),
-            )}
-          </div>
-        </section>
-
         <section id="rewards" className="page">
           <header>
             <p className="eyebrow">Награды</p>
@@ -283,7 +387,7 @@ const Home = ({
         <section id="loyalty" className="page">
           <header>
             <p className="eyebrow">Система лояльности</p>
-            <h2>Статус туриста</h2>
+            <h2>Паспорт туриста</h2>
             <p>Чем больше открытых точек, тем выше статус и больше бонусов.</p>
           </header>
           <div className="cards">
@@ -341,6 +445,16 @@ function App() {
   const [password, setPassword] = useState('')
   const [user, setUser] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [points, setPoints] = useState(1240)
+  const [collectedCards, setCollectedCards] = useState(new Set())
+  const [checkinStatus, setCheckinStatus] = useState({})
+  const [userLocation, setUserLocation] = useState(null)
+  const [locationStatus, setLocationStatus] = useState('idle')
+  const [locationError, setLocationError] = useState(null)
+  const [activeNarrator, setActiveNarrator] = useState(null)
+  const level = calculateLevel(points)
+  const nextLevelAt = level * 500
+  const pointsToNext = Math.max(nextLevelAt - points, 0)
 
   useEffect(() => {
     const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches
@@ -350,6 +464,35 @@ function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme
   }, [theme])
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setLocationStatus('unsupported')
+      return undefined
+    }
+    setLocationStatus('requesting')
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        })
+        setLocationStatus('ready')
+        setLocationError(null)
+      },
+      (err) => {
+        setLocationStatus(err.code === 1 ? 'denied' : 'error')
+        setLocationError(err.message || 'Ошибка геолокации')
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 10000,
+        timeout: 10000,
+      },
+    )
+    return () => navigator.geolocation.clearWatch(watchId)
+  }, [])
 
   useEffect(() => {
     const fetchMe = async () => {
@@ -490,6 +633,104 @@ function App() {
     setModalType('poi')
   }
 
+  const speakCharacter = (card, trigger) => {
+    if (!card?.character?.text) return
+    if (!('speechSynthesis' in window)) return
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(card.character.text)
+    utterance.lang = 'ru-RU'
+    utterance.rate = card.character.voice?.rate || 1
+    utterance.pitch = card.character.voice?.pitch || 1
+    setActiveNarrator(`${card.id}:${trigger}`)
+    utterance.onend = () => setActiveNarrator(null)
+    window.speechSynthesis.speak(utterance)
+  }
+
+  const handleCheckIn = (card) => {
+    if (collectedCards.has(card.id)) {
+      setCheckinStatus((prev) => ({
+        ...prev,
+        [card.id]: 'Эта карточка уже собрана.',
+      }))
+      return false
+    }
+    if (!userLocation) {
+      setCheckinStatus((prev) => ({
+        ...prev,
+        [card.id]: 'Включи геолокацию, чтобы отметить посещение.',
+      }))
+      return false
+    }
+    const distance = getDistanceMeters(userLocation, {
+      lat: card.coords[0],
+      lng: card.coords[1],
+    })
+    if (distance <= card.radius) {
+      setCollectedCards((prev) => {
+        const next = new Set(prev)
+        next.add(card.id)
+        return next
+      })
+      setPoints((prev) => prev + card.points)
+      setCheckinStatus((prev) => ({
+        ...prev,
+        [card.id]: `Засчитано! +${card.points} баллов.`,
+      }))
+      return true
+    } else {
+      setCheckinStatus((prev) => ({
+        ...prev,
+        [card.id]: `Ты далековато: ${Math.round(distance)} м. Подойди ближе.`,
+      }))
+      return false
+    }
+  }
+
+  const handleQrScan = (card) => {
+    if (!userLocation) {
+      setCheckinStatus((prev) => ({
+        ...prev,
+        [card.id]: 'Включи геолокацию, чтобы подтвердить QR.',
+      }))
+      return
+    }
+    const distance = getDistanceMeters(userLocation, {
+      lat: card.coords[0],
+      lng: card.coords[1],
+    })
+    if (distance <= card.radius) {
+      setCheckinStatus((prev) => ({
+        ...prev,
+        [card.id]: 'QR подтвержден. История активирована.',
+      }))
+      speakCharacter(card, 'qr')
+    } else {
+      setCheckinStatus((prev) => ({
+        ...prev,
+        [card.id]: `Для QR нужно подойти ближе: ${Math.round(distance)} м.`,
+      }))
+    }
+  }
+
+  const handlePoiCheckIn = () => {
+    if (!selectedPoi) return
+    const matched = GAME_CARDS.find((item) => item.title === selectedPoi.name)
+    if (!matched) {
+      setCheckinStatus((prev) => ({
+        ...prev,
+        [selectedPoi.id]: 'Эта точка пока без коллекционной карточки.',
+      }))
+      return
+    }
+    const ok = handleCheckIn({
+      ...matched,
+      coords: selectedPoi.coords || matched.coords,
+    })
+    if (ok) {
+      speakCharacter(matched, 'checkin')
+    }
+  }
+
   return (
     <Router>
       <Routes>
@@ -505,10 +746,25 @@ function App() {
               onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
               user={user}
               onLogout={handleLogout}
+              points={points}
+              level={level}
+              userLocation={userLocation}
+              locationStatus={locationStatus}
+              locationError={locationError}
             />
           }
         />
-        <Route path="/map" element={<FullMapPage onSelectPoi={handleSelectPoi} />} />
+        <Route
+          path="/map"
+          element={
+            <FullMapPage
+              onSelectPoi={handleSelectPoi}
+              userLocation={userLocation}
+              locationStatus={locationStatus}
+              locationError={locationError}
+            />
+          }
+        />
         <Route path="/admin/qr" element={<QRAdmin />} />
         <Route path="/campaign/:code/" element={<CharacterWelcome />} />
         <Route
@@ -527,6 +783,50 @@ function App() {
                     </article>
                   ),
                 )}
+              </div>
+            </PageShell>
+          }
+        />
+        <Route
+          path="/cards"
+          element={
+            <PageShell
+              title="Коллекционные карточки"
+              subtitle="Собирай карточки, отмечая посещение на карте."
+            >
+              <div className="cards collectibles">
+                {GAME_CARDS.map((card) => {
+                  const collected = collectedCards.has(card.id)
+                  return (
+                    <article key={card.id} className="card collectible-card">
+                      <img
+                        className="collectible-photo"
+                        src={card.image}
+                        alt={card.title}
+                        loading="lazy"
+                      />
+                      <div className="collectible-head">
+                        <h3>{card.title}</h3>
+                        <span className="collectible-points">
+                          +{card.points} баллов
+                        </span>
+                      </div>
+                      <p>{card.desc}</p>
+                      <p className="collectible-info">{card.info}</p>
+                      <div className="character-card">
+                        <div>
+                          <p className="character-name">{card.character.name}</p>
+                          <p className="character-text">{card.character.text}</p>
+                        </div>
+                        <span className="character-chip">ИИ-персонаж</span>
+                      </div>
+                      <div className="card-tags">
+                        <span>{collected ? 'Собрано' : 'Ожидает посещения'}</span>
+                        <span>Радиус: {card.radius} м</span>
+                      </div>
+                    </article>
+                  )
+                })}
               </div>
             </PageShell>
           }
@@ -591,31 +891,150 @@ function App() {
           element={
             <PageShell
               title="Личный кабинет"
-              subtitle="Ваш прогресс, достижения и награды."
+              subtitle="Ваш прогресс, достижения и настройки."
             >
-              <div className="profile-card">
-                <div className="profile-avatar"></div>
-                <div>
-                  <p className="profile-name">{profile.name || 'Гость'}</p>
-                  <p className="profile-email">{profile.email || 'Не указан'}</p>
+              <section className="profile-hero">
+                <div className="profile-card">
+                  <div className="profile-avatar"></div>
+                  <div>
+                    <p className="profile-name">{profile.name || 'Гость'}</p>
+                    <p className="profile-email">{profile.email || 'Не указан'}</p>
+                  </div>
                 </div>
-              </div>
-              <div className="cards">
-                {['Первооткрыватель', 'Городской следопыт'].map((title) => (
-                  <article key={title} className="card">
-                    <h3>{title}</h3>
-                    <p>Достижение открывает награду.</p>
-                  </article>
-                ))}
-              </div>
-              <div className="cards">
-                {['Скидка на кофе', 'Билет в музей'].map((title) => (
-                  <article key={title} className="card">
-                    <h3>{title}</h3>
-                    <p>Награда за достижение.</p>
-                  </article>
-                ))}
-              </div>
+                <div className="profile-stats">
+                  <div className="stat">
+                    <p className="stat-label">Накоплено баллов</p>
+                    <p className="stat-value">{formatNumber(points)}</p>
+                  </div>
+                  <div className="stat">
+                    <p className="stat-label">Текущий уровень</p>
+                    <p className="stat-value">{level}</p>
+                  </div>
+                  <div className="stat">
+                    <p className="stat-label">До следующего уровня</p>
+                    <p className="stat-value">{formatNumber(pointsToNext)} баллов</p>
+                  </div>
+                </div>
+              </section>
+
+              <section className="profile-section">
+                <h3 className="section-title">Мои маршруты</h3>
+                <div className="cards">
+                  {[
+                    'Исторический центр (8 точек)',
+                    'Квест по музеям (5 точек)',
+                    'Лесной маршрут Бубы (12 точек)',
+                  ].map((title) => (
+                    <article key={title} className="card">
+                      <h4>{title}</h4>
+                      <p>Статус: в процессе</p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section className="profile-section">
+                <h3 className="section-title">Мои достижения</h3>
+                <div className="badge-grid">
+                  {[
+                    { title: 'Первооткрыватель', desc: '+100 баллов' },
+                    { title: 'Городской следопыт', desc: '5 маршрутов' },
+                    { title: 'Ночной исследователь', desc: 'вечерний квест' },
+                    { title: 'Летописец', desc: '10 QR-точек' },
+                    { title: 'Друзья Бубы', desc: 'семейный маршрут' },
+                  ].map((item, index) => (
+                    <article key={item.title} className="badge">
+                      <div className={`badge-icon badge-${index + 1}`}>
+                        {item.title[0]}
+                      </div>
+                      <div>
+                        <p className="badge-title">{item.title}</p>
+                        <p className="badge-desc">{item.desc}</p>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section className="profile-section">
+                <h3 className="section-title">Собранные карточки</h3>
+                {GAME_CARDS.filter((card) => collectedCards.has(card.id)).length ===
+                0 ? (
+                  <p className="collectible-empty">
+                    Пока нет собранных карточек. Отметь посещение на карте.
+                  </p>
+                ) : (
+                  <div className="cards collectibles">
+                    {GAME_CARDS.filter((card) => collectedCards.has(card.id)).map(
+                      (card) => (
+                        <article key={card.id} className="card collectible-card">
+                          <img
+                            className="collectible-photo"
+                            src={card.image}
+                            alt={card.title}
+                            loading="lazy"
+                          />
+                          <div className="collectible-head">
+                            <h3>{card.title}</h3>
+                            <span className="collectible-points">
+                              +{card.points} баллов
+                            </span>
+                          </div>
+                          <p>{card.desc}</p>
+                          <p className="collectible-info">{card.info}</p>
+                          <div className="character-card">
+                            <div>
+                              <p className="character-name">{card.character.name}</p>
+                              <p className="character-text">{card.character.text}</p>
+                            </div>
+                            <span className="character-chip">ИИ-персонаж</span>
+                          </div>
+                        </article>
+                      ),
+                    )}
+                  </div>
+                )}
+              </section>
+
+              <section className="profile-section">
+                <h3 className="section-title">Настройки профиля и данных</h3>
+                <form className="profile-form">
+                  <label>
+                    Имя
+                    <input
+                      type="text"
+                      placeholder="Ваше имя"
+                      value={profile.name}
+                      onChange={(event) =>
+                        setProfile((prev) => ({ ...prev, name: event.target.value }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Email
+                    <input
+                      type="email"
+                      placeholder="name@example.com"
+                      value={profile.email}
+                      onChange={(event) =>
+                        setProfile((prev) => ({ ...prev, email: event.target.value }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Город
+                    <input type="text" placeholder="Рязань" defaultValue="Рязань" />
+                  </label>
+                  <div className="profile-actions">
+                    <button className="primary" type="button">
+                      Сохранить изменения
+                    </button>
+                    <button className="ghost" type="button">
+                      Экспортировать данные
+                    </button>
+                  </div>
+                </form>
+              </section>
             </PageShell>
           }
         />
@@ -758,25 +1177,83 @@ function App() {
 
             {modalType === 'poi' && selectedPoi && (
               <div className="modal-body">
-                <h3>{selectedPoi.name}</h3>
-                <p className="modal-subtitle">
-                  История и информация из открытых источников.
-                </p>
-                {poiSummary && <p className="poi-summary">{poiSummary}</p>}
-                <div className="poi-meta">
-                  <span>Категория: {selectedPoi.category || 'Точка интереса'}</span>
-                  <span>QR: {selectedPoi.qr || 'Ожидает интеграции'}</span>
-                </div>
-                <div className="poi-qr">
-                  <div className="qr-placeholder">QR</div>
-                  <p>
-                    Здесь будет показан QR-код и сценарий персонажа (интеграция
-                    наработок коллеги).
-                  </p>
-                </div>
-                <button className="primary" type="button">
-                  Отметить как посещено
-                </button>
+                {(() => {
+                  const matched = GAME_CARDS.find(
+                    (item) => item.title === selectedPoi.name,
+                  )
+                  const key = matched ? matched.id : selectedPoi.id
+                  const collected = matched ? collectedCards.has(matched.id) : false
+                  return (
+                    <>
+                      <h3>{selectedPoi.name}</h3>
+                      <p className="modal-subtitle">
+                        История и информация из открытых источников.
+                      </p>
+                      {matched && (
+                        <>
+                          <img
+                            className="collectible-photo"
+                            src={matched.image}
+                            alt={matched.title}
+                          />
+                          <p className="collectible-info">{matched.info}</p>
+                          <div className="character-card">
+                            <div>
+                              <p className="character-name">
+                                {matched.character.name}
+                              </p>
+                              <p className="character-text">
+                                {matched.character.text}
+                              </p>
+                            </div>
+                            <span className="character-chip">ИИ-персонаж</span>
+                          </div>
+                        </>
+                      )}
+                      {poiSummary && <p className="poi-summary">{poiSummary}</p>}
+                      <div className="poi-meta">
+                        <span>
+                          Категория: {selectedPoi.category || 'Точка интереса'}
+                        </span>
+                        <span>QR: {selectedPoi.qr || 'Ожидает интеграции'}</span>
+                      </div>
+                      <div className="poi-qr">
+                        <div className="qr-placeholder">QR</div>
+                        <p>Сканируй QR, чтобы услышать историю персонажа.</p>
+                      </div>
+                      <div className="collectible-actions">
+                        <button
+                          className="ghost"
+                          type="button"
+                          onClick={() =>
+                            matched &&
+                            handleQrScan({
+                              ...matched,
+                              coords: selectedPoi.coords || matched.coords,
+                            })
+                          }
+                          disabled={!matched}
+                        >
+                          Сканировать QR
+                        </button>
+                        <button
+                          className="primary"
+                          type="button"
+                          onClick={handlePoiCheckIn}
+                          disabled={collected || !matched}
+                        >
+                          {collected ? 'Уже собрано' : 'Я здесь!'}
+                        </button>
+                      </div>
+                      {activeNarrator?.startsWith(matched?.id || '') && (
+                        <p className="collectible-status">Идёт озвучка персонажа…</p>
+                      )}
+                      {checkinStatus[key] && (
+                        <p className="collectible-status">{checkinStatus[key]}</p>
+                      )}
+                    </>
+                  )
+                })()}
               </div>
             )}
           </div>
