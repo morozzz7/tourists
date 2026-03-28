@@ -22,12 +22,7 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/quests/', include('quests.urls')),
-    path('api/auth/csrf/', quests_views.csrf, name='auth-csrf'),
-    path('api/auth/register/', quests_views.register, name='auth-register'),
-    path('api/auth/login/', quests_views.login, name='auth-login'),
-    path('api/auth/logout/', quests_views.logout, name='auth-logout'),
-    path('api/auth/me/', quests_views.me, name='auth-me'),
+    path('', include('quests.urls')),
 ]
 
 if settings.DEBUG:

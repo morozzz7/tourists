@@ -1,11 +1,11 @@
+// App.jsx - исправленная версия
 import { useEffect, useRef, useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import RyazanMap from './components/Map'
 import QRAdmin from './components/QRAdmin'
-import CharacterWelcome from './components/CharacterWelcome'
+import PoiWelcome from './components/PoiWelcome'
 import mascotImg from './assets/hero.png'
 import './App.css'
-
 
 const demoMessages = [
   {
@@ -53,8 +53,7 @@ const GAME_CARDS = [
     id: 'poi-kremlin',
     title: 'Рязанский Кремль',
     desc: 'Собери карту кремля и открой историческую хронику.',
-    info:
-      'Главный исторический комплекс города с соборами, колокольней и панорамой на Оку.',
+    info: 'Главный исторический комплекс города с соборами, колокольней и панорамой на Оку.',
     coords: [54.6348, 39.7486],
     points: 120,
     qrPoints: 20,
@@ -62,18 +61,16 @@ const GAME_CARDS = [
     image: '/images/kremlin.jpg',
     character: {
       name: 'Гид Федот',
-      text:
-        'Добро пожаловать в сердце древней Рязани! Посмотри вверх — колокольня хранит сотни лет историй.',
+      text: 'Добро пожаловать в сердце древней Рязани! Посмотри вверх — колокольня хранит сотни лет историй.',
       voice: { rate: 1, pitch: 0.9 },
     },
-    active: false,
+    active: true,
   },
   {
     id: 'poi-esenin',
     title: 'Памятник Есенину',
     desc: 'Слушай стихи, чтобы открыть редкую карточку.',
-    info:
-      'Монумент поэту у набережной — любимая точка прогулок и городских маршрутов.',
+    info: 'Монумент поэту у набережной — любимая точка прогулок и городских маршрутов.',
     coords: [54.636, 39.747],
     points: 90,
     qrPoints: 25,
@@ -81,9 +78,7 @@ const GAME_CARDS = [
     image: '/images/esenin.jpg',
     character: {
       name: 'Сергей Есенин',
-      text:
-        'Ты здесь — и строки оживают. Вдохни воздух Оки и запомни этот вид.',
-      audio: '/audio/esenin.mp3',
+      text: 'Ты здесь — и строки оживают. Вдохни воздух Оки и запомни этот вид.',
       voice: { rate: 1.05, pitch: 1.2 },
     },
     active: true,
@@ -92,8 +87,7 @@ const GAME_CARDS = [
     id: 'poi-mushrooms',
     title: 'Грибы с глазами',
     desc: 'Найди арт-объект и получи бонус за фото.',
-    info:
-      'Городская легенда и любимое место для фото: улыбчивые грибы охраняют район.',
+    info: 'Городская легенда и любимое место для фото: улыбчивые грибы охраняют район.',
     coords: [54.6288, 39.7345],
     points: 70,
     qrPoints: 15,
@@ -101,49 +95,10 @@ const GAME_CARDS = [
     image: '/images/mushrooms.jpg',
     character: {
       name: 'Буба',
-      text:
-        'Эти грибы с глазами знают все тайные тропы. Сделай фото и получи дружескую улыбку!',
+      text: 'Эти грибы с глазами знают все тайные тропы. Сделай фото и получи дружескую улыбку!',
       voice: { rate: 0.95, pitch: 1.15 },
     },
-    active: false,
-  },
-  {
-    id: 'poi-theatre',
-    title: 'Рязанский театр драмы',
-    desc: 'Подними занавес, чтобы открыть городскую сцену.',
-    info:
-      'Один из старейших театров региона, где каждый сезон звучат премьеры и классика.',
-    coords: [54.6322, 39.7325],
-    points: 110,
-    qrPoints: 20,
-    radius: 150,
-    image: '/images/drama.jpg',
-    character: {
-      name: 'Режиссер Аркадий',
-      text:
-        'Свет рампы уже близко! Представь, как здесь звучит аплодисмент после премьеры.',
-      voice: { rate: 0.98, pitch: 0.85 },
-    },
-    active: false,
-  },
-  {
-    id: 'poi-pedestrian',
-    title: 'Почтовая улица',
-    desc: 'Найди тайный знак на пешеходной улице.',
-    info:
-      'Главная прогулочная улица с кофейнями, музыкой и ярмарками в сезон.',
-    coords: [54.6299, 39.7378],
-    points: 80,
-    qrPoints: 15,
-    radius: 130,
-    image: '/images/post.jpg',
-    character: {
-      name: 'Курьер Сева',
-      text:
-        'Быстрый маршрут готов! Слушай шум улицы и собирай отметки на пути.',
-      voice: { rate: 1.1, pitch: 1.0 },
-    },
-    active: false,
+    active: true,
   },
 ]
 
@@ -258,6 +213,51 @@ const FullMapPage = ({
   autoCapturedIds,
 }) => {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams();
+  const poiId = searchParams.get('poi_id');
+  const [openedPoiId, setOpenedPoiId] = useState(null)
+  
+  useEffect(() => {
+    if (poiId && poiId !== openedPoiId) {
+      const fetchAndOpenPoi = async () => {
+        try {
+          const response = await fetch(`${API_BASE}/api/quests/pois/${poiId}/`)
+          const poiData = await response.json()
+
+          const poiForModal = {
+            id: poiData.id,
+            name: poiData.title,
+            category: 'poi',
+            coords: [poiData.coords_lat, poiData.coords_lng],
+            description: poiData.description,
+            info: poiData.info,
+            points: poiData.points,
+            qrPoints: poiData.qr_points,
+            image: poiData.image,
+            character: {
+              name: poiData.character_name,
+              text: poiData.character_text,
+              voice: {
+                rate: poiData.character_voice_rate,
+                pitch: poiData.character_voice_pitch
+              }
+            }
+          }
+
+          onSelectPoi(poiForModal)
+          setOpenedPoiId(poiId)
+
+          // Убираем параметр из URL
+          navigate('/map', { replace: true })
+        } catch (error) {
+          console.error('Error loading POI:', error)
+        }
+      }
+
+      fetchAndOpenPoi()
+    }
+  }, [poiId, onSelectPoi, navigate, openedPoiId])
+
   return (
     <div className="map-page">
       <div className="map-page-header">
@@ -294,178 +294,178 @@ const Home = ({
   const navigate = useNavigate()
   return (
     <>
-        <section id="home" className="hero">
-          <div className="map-wrap">
-            <div className="map-header">
-              <div>
-                <p className="eyebrow">Геймификация туризма 2026</p>
-                <h1>Рязань - территория открытий</h1>
-                <p className="lead">
-                  Исследуй Рязанскую область через QR-квесты, интерактивную карту
-                  и реальные награды.
-                </p>
-              </div>
-              <div className="register-card">
-                <p className="register-title">Войти или создать профиль</p>
-                <p className="register-subtitle">
-                  Кнопки регистрации находятся в блоке личного кабинета слева.
-                </p>
-              </div>
-            </div>
-
-            <div className="map-shell">
-              <button className="map-full-btn" onClick={() => navigate('/map')}>
-                На весь экран
-              </button>
-              <RyazanMap
-                onSelectPoi={onSelectPoi}
-                userLocation={userLocation}
-                locationStatus={locationStatus}
-                locationError={locationError}
-                autoCapturedIds={autoCapturedIds}
-              />
-              <div className="map-mask" aria-hidden="true"></div>
-              <div className="map-legend">
-                <span className="legend-dot"></span>
-                <p>Рязанская область в фокусе</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="mascot-panel">
-            <div className="speech">
-              <p className="speech-title">Привет! Давай начнем путешествие.</p>
-              <p>
-                Хочешь узнать больше о Рязани и Рязанской области? Пройди
-                небольшую анкету, чтобы я знал, что тебе нравится.
+      <section id="home" className="hero">
+        <div className="map-wrap">
+          <div className="map-header">
+            <div>
+              <p className="eyebrow">Геймификация туризма 2026</p>
+              <h1>Рязань - территория открытий</h1>
+              <p className="lead">
+                Исследуй Рязанскую область через QR-квесты, интерактивную карту
+                и реальные награды.
               </p>
-              <button className="primary" onClick={() => onOpenModal('legend')}>
-                Легенда помощника
-              </button>
             </div>
-            <div
-              className="mascot"
-              role="button"
-              tabIndex={0}
-              onClick={() => onOpenModal('legend')}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') onOpenModal('legend')
-              }}
-            >
-              <img src={mascotImg} alt="Буба" />
-              <p className="mascot-name">Буба, проводник по Рязани</p>
+            <div className="register-card">
+              <p className="register-title">Войти или создать профиль</p>
+              <p className="register-subtitle">
+                Кнопки регистрации находятся в блоке личного кабинета слева.
+              </p>
             </div>
           </div>
-        </section>
 
-        <section id="routes" className="page">
-          <header>
-            <p className="eyebrow">Экскурсии и квесты</p>
-            <h2>Лента маршрутов</h2>
-            <p>
-              Список приключений с QR-точками, тайниками и сюжетными линиями.
-              Пока пусто, но место уже готово для карточек маршрутов.
-            </p>
-          </header>
-          <div className="cards">
-            {['Исторический центр', 'Квест по музеям', 'Природные тропы'].map(
-              (title) => (
-                <article key={title} className="card">
-                  <h3>{title}</h3>
-                  <p>Описание маршрута появится здесь.</p>
-                  <div className="card-tags">
-                    <span>QR</span>
-                    <span>60–90 мин</span>
-                  </div>
-                </article>
-              ),
-            )}
+          <div className="map-shell">
+            <button className="map-full-btn" onClick={() => navigate('/map')}>
+              На весь экран
+            </button>
+            <RyazanMap
+              onSelectPoi={onSelectPoi}
+              userLocation={userLocation}
+              locationStatus={locationStatus}
+              locationError={locationError}
+              autoCapturedIds={autoCapturedIds}
+            />
+            <div className="map-mask" aria-hidden="true"></div>
+            <div className="map-legend">
+              <span className="legend-dot"></span>
+              <p>Рязанская область в фокусе</p>
+            </div>
           </div>
-        </section>
+        </div>
 
-        <section id="kids" className="page">
-          <header>
-            <p className="eyebrow">Персонажи для детей</p>
-            <h2>Сказочный аудиогид</h2>
+        <div className="mascot-panel">
+          <div className="speech">
+            <p className="speech-title">Привет! Давай начнем путешествие.</p>
             <p>
-              Для семей с детьми: персонаж ведет ребенка по короткому пешему
-              маршруту, рассказывает истории в игровой форме и предлагает
-              простые задания с QR-сканированием.
+              Хочешь узнать больше о Рязани и Рязанской области? Пройди
+              небольшую анкету, чтобы я знал, что тебе нравится.
             </p>
-          </header>
-          <div className="cards">
-            <article className="card">
-              <h3>Маршрут для малышей</h3>
-              <p>6 точек в пешей доступности, 30–40 минут.</p>
-              <div className="card-tags">
-                <span>Аудиогид</span>
-                <span>QR</span>
-              </div>
-            </article>
-            <article className="card">
-              <h3>Мини‑тест в конце</h3>
-              <p>3 вопроса по маршруту, +50 баллов.</p>
-              <div className="card-tags">
-                <span>Игра</span>
-                <span>Баллы</span>
-              </div>
-            </article>
+            <button className="primary" onClick={() => onOpenModal('legend')}>
+              Легенда помощника
+            </button>
           </div>
-        </section>
+          <div
+            className="mascot"
+            role="button"
+            tabIndex={0}
+            onClick={() => onOpenModal('legend')}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') onOpenModal('legend')
+            }}
+          >
+            <img src={mascotImg} alt="Буба" />
+            <p className="mascot-name">Буба, проводник по Рязани</p>
+          </div>
+        </div>
+      </section>
 
-        <section id="rewards" className="page">
-          <header>
-            <p className="eyebrow">Награды</p>
-            <h2>Баллы и призы</h2>
-            <p>Баллы за коды, маршруты и тесты можно обменять на скидки и подарки.</p>
-          </header>
-          <div className="cards">
-            {['Кофе и выпечка', 'Прокат велосипедов', 'Сувениры'].map((title) => (
+      <section id="routes" className="page">
+        <header>
+          <p className="eyebrow">Экскурсии и квесты</p>
+          <h2>Лента маршрутов</h2>
+          <p>
+            Список приключений с QR-точками, тайниками и сюжетными линиями.
+            Пока пусто, но место уже готово для карточек маршрутов.
+          </p>
+        </header>
+        <div className="cards">
+          {['Исторический центр', 'Квест по музеям', 'Природные тропы'].map(
+            (title) => (
               <article key={title} className="card">
                 <h3>{title}</h3>
-                <p>Партнерские предложения появятся здесь.</p>
+                <p>Описание маршрута появится здесь.</p>
+                <div className="card-tags">
+                  <span>QR</span>
+                  <span>60–90 мин</span>
+                </div>
               </article>
-            ))}
-          </div>
-        </section>
+            ),
+          )}
+        </div>
+      </section>
 
-        <section id="loyalty" className="page">
-          <header>
-            <p className="eyebrow">Система лояльности</p>
-            <h2>Паспорт туриста</h2>
-            <p>Чем больше открытых точек, тем выше статус и больше бонусов.</p>
-          </header>
-          <div className="stamp-row">
-            <div className="stamp-slot" aria-label="Штамп 1"></div>
-            <div className="stamp-slot" aria-label="Штамп 2"></div>
-            <div className="stamp-slot" aria-label="Штамп 3"></div>
-          </div>
-        </section>
+      <section id="kids" className="page">
+        <header>
+          <p className="eyebrow">Персонажи для детей</p>
+          <h2>Сказочный аудиогид</h2>
+          <p>
+            Для семей с детьми: персонаж ведет ребенка по короткому пешему
+            маршруту, рассказывает истории в игровой форме и предлагает
+            простые задания с QR-сканированием.
+          </p>
+        </header>
+        <div className="cards">
+          <article className="card">
+            <h3>Маршрут для малышей</h3>
+            <p>6 точек в пешей доступности, 30–40 минут.</p>
+            <div className="card-tags">
+              <span>Аудиогид</span>
+              <span>QR</span>
+            </div>
+          </article>
+          <article className="card">
+            <h3>Мини‑тест в конце</h3>
+            <p>3 вопроса по маршруту, +50 баллов.</p>
+            <div className="card-tags">
+              <span>Игра</span>
+              <span>Баллы</span>
+            </div>
+          </article>
+        </div>
+      </section>
 
-        <section id="faq" className="page">
-          <header>
-            <p className="eyebrow">FAQ</p>
-            <h2>Часто задаваемые вопросы</h2>
-            <p>
-              Готовый блок для вопросов: как начисляются баллы, где получать
-              награды, как работает QR-сканер.
-            </p>
-          </header>
-          <div className="faq">
-            <article>
-              <h3>Как начисляются баллы?</h3>
-              <p>Ответ появится после заполнения базы маршрутов.</p>
+      <section id="rewards" className="page">
+        <header>
+          <p className="eyebrow">Награды</p>
+          <h2>Баллы и призы</h2>
+          <p>Баллы за коды, маршруты и тесты можно обменять на скидки и подарки.</p>
+        </header>
+        <div className="cards">
+          {['Кофе и выпечка', 'Прокат велосипедов', 'Сувениры'].map((title) => (
+            <article key={title} className="card">
+              <h3>{title}</h3>
+              <p>Партнерские предложения появятся здесь.</p>
             </article>
-            <article>
-              <h3>Можно ли проходить маршруты без гида?</h3>
-              <p>Да, будут доступны самостоятельные и групповые форматы.</p>
-            </article>
-            <article>
-              <h3>Где получить призы?</h3>
-              <p>Список партнеров появится в разделе лояльности.</p>
-            </article>
-          </div>
-        </section>
+          ))}
+        </div>
+      </section>
+
+      <section id="loyalty" className="page">
+        <header>
+          <p className="eyebrow">Система лояльности</p>
+          <h2>Паспорт туриста</h2>
+          <p>Чем больше открытых точек, тем выше статус и больше бонусов.</p>
+        </header>
+        <div className="stamp-row">
+          <div className="stamp-slot" aria-label="Штамп 1"></div>
+          <div className="stamp-slot" aria-label="Штамп 2"></div>
+          <div className="stamp-slot" aria-label="Штамп 3"></div>
+        </div>
+      </section>
+
+      <section id="faq" className="page">
+        <header>
+          <p className="eyebrow">FAQ</p>
+          <h2>Часто задаваемые вопросы</h2>
+          <p>
+            Готовый блок для вопросов: как начисляются баллы, где получать
+            награды, как работает QR-сканер.
+          </p>
+        </header>
+        <div className="faq">
+          <article>
+            <h3>Как начисляются баллы?</h3>
+            <p>Ответ появится после заполнения базы маршрутов.</p>
+          </article>
+          <article>
+            <h3>Можно ли проходить маршруты без гида?</h3>
+            <p>Да, будут доступны самостоятельные и групповые форматы.</p>
+          </article>
+          <article>
+            <h3>Где получить призы?</h3>
+            <p>Список партнеров появится в разделе лояльности.</p>
+          </article>
+        </div>
+      </section>
     </>
   )
 }
@@ -591,11 +591,6 @@ function App() {
     setMessages((prev) => [...prev, userMessage])
     setInput('')
 
-    // TODO: Подключить Ollama здесь.
-    // const reply = await fetch('/api/ollama', { method: 'POST', body: JSON.stringify({ prompt: userMessage.text }) })
-    // const data = await reply.json()
-    // setMessages((prev) => [...prev, { from: 'assistant', text: data.message }])
-
     setMessages((prev) => [
       ...prev,
       {
@@ -691,19 +686,6 @@ function App() {
       audioRef.current.pause()
       audioRef.current = null
     }
-    if (card.character.audio) {
-      const audio = new Audio(card.character.audio)
-      audioRef.current = audio
-      setActiveNarrator(`${card.id}:${trigger}`)
-      audio.onended = () => setActiveNarrator(null)
-      audio.onerror = () => {
-        setActiveNarrator(null)
-      }
-      audio.play().catch(() => {
-        setActiveNarrator(null)
-      })
-      return
-    }
     if (!('speechSynthesis' in window)) return
     window.speechSynthesis.cancel()
     const utterance = new SpeechSynthesisUtterance(card.character.text)
@@ -743,16 +725,6 @@ function App() {
     const poiName = normalizeName(poi.name)
     const byName = activeCards.find((card) => normalizeName(card.title) === poiName)
     if (byName) return byName
-    const byContains = activeCards.find((card) =>
-      poiName.includes(normalizeName(card.title)),
-    )
-    if (byContains) return byContains
-    const esenin = activeCards.find((card) =>
-      normalizeName(card.title).includes('есенин'),
-    )
-    if (esenin && (poiName.includes('есенин') || poiName.includes('yesenin'))) {
-      return esenin
-    }
     if (!poi.coords) return null
     let best = null
     let bestDistance = Infinity
@@ -789,9 +761,9 @@ function App() {
     const distance = DISABLE_GEO_CHECK
       ? 0
       : getDistanceMeters(userLocation, {
-          lat: card.coords[0],
-          lng: card.coords[1],
-        })
+        lat: card.coords[0],
+        lng: card.coords[1],
+      })
     if (distance <= card.radius) {
       setCollectedCards((prev) => {
         const next = new Set(prev)
@@ -825,9 +797,9 @@ function App() {
     const distance = DISABLE_GEO_CHECK
       ? 0
       : getDistanceMeters(userLocation, {
-          lat: card.coords[0],
-          lng: card.coords[1],
-        })
+        lat: card.coords[0],
+        lng: card.coords[1],
+      })
     if (distance <= card.radius) {
       setScannedCards((prev) => {
         if (prev.has(card.id)) return prev
@@ -941,18 +913,18 @@ function App() {
           }
         />
         <Route
-          path="/admin/qr"
+          path="/scan/:code"
           element={
             <Shell>
-              <QRAdmin />
+              <PoiWelcome />
             </Shell>
           }
         />
         <Route
-          path="/campaign/:code/"
+          path="/admin/qr"
           element={
             <Shell>
-              <CharacterWelcome />
+              <QRAdmin />
             </Shell>
           }
         />
@@ -996,6 +968,7 @@ function App() {
                           src={card.image}
                           alt={card.title}
                           loading="lazy"
+                          onError={(e) => { e.target.src = '/placeholder.png' }}
                         />
                         <div className="collectible-head">
                           <h3>{card.title}</h3>
@@ -1104,13 +1077,6 @@ function App() {
                       </article>
                     ),
                   )}
-                  {REWARDS.filter((reward) => purchasedRewards.has(reward.id)).length ===
-                    0 && (
-                    <article className="card">
-                      <h3>Награды будут здесь</h3>
-                      <p>Собирай баллы, чтобы открыть покупки.</p>
-                    </article>
-                  )}
                 </div>
               </PageShell>
             </Shell>
@@ -1124,169 +1090,130 @@ function App() {
                 title="Личный кабинет"
                 subtitle="Ваш прогресс, достижения и настройки."
               >
-              <section className="profile-hero">
-                <div className="profile-card">
-                  <div className="profile-avatar"></div>
-                  <div>
-                    <p className="profile-name">{profile.name || 'Гость'}</p>
-                    <p className="profile-email">{profile.email || 'Не указан'}</p>
+                <section className="profile-hero">
+                  <div className="profile-card">
+                    <div className="profile-avatar"></div>
+                    <div>
+                      <p className="profile-name">{profile.name || 'Гость'}</p>
+                      <p className="profile-email">{profile.email || 'Не указан'}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="profile-stats">
-                  <div className="stat">
-                    <p className="stat-label">Накоплено баллов</p>
-                    <p className="stat-value">{formatNumber(points)}</p>
+                  <div className="profile-stats">
+                    <div className="stat">
+                      <p className="stat-label">Накоплено баллов</p>
+                      <p className="stat-value">{formatNumber(points)}</p>
+                    </div>
+                    <div className="stat">
+                      <p className="stat-label">Текущий уровень</p>
+                      <p className="stat-value">{level}</p>
+                    </div>
+                    <div className="stat">
+                      <p className="stat-label">До следующего уровня</p>
+                      <p className="stat-value">{formatNumber(pointsToNext)} баллов</p>
+                    </div>
                   </div>
-                  <div className="stat">
-                    <p className="stat-label">Текущий уровень</p>
-                    <p className="stat-value">{level}</p>
-                  </div>
-                  <div className="stat">
-                    <p className="stat-label">До следующего уровня</p>
-                    <p className="stat-value">{formatNumber(pointsToNext)} баллов</p>
-                  </div>
-                </div>
-              </section>
+                </section>
 
-              <section className="profile-section">
-                <h3 className="section-title">Мои маршруты</h3>
-                <div className="cards">
-                  {[
-                    'Исторический центр (8 точек)',
-                    'Квест по музеям (5 точек)',
-                    'Лесной маршрут Бубы (12 точек)',
-                  ].map((title) => (
-                    <article key={title} className="card">
-                      <h4>{title}</h4>
-                      <p>Статус: в процессе</p>
-                    </article>
-                  ))}
-                </div>
-              </section>
-
-              <section className="profile-section">
-                <h3 className="section-title">Мои достижения</h3>
-                <div className="badge-grid">
-                  {[
-                    { title: 'Первооткрыватель', desc: '+100 баллов' },
-                    { title: 'Городской следопыт', desc: '5 маршрутов' },
-                    { title: 'Ночной исследователь', desc: 'вечерний квест' },
-                    { title: 'Летописец', desc: '10 QR-точек' },
-                    { title: 'Друзья Бубы', desc: 'семейный маршрут' },
-                  ].map((item, index) => (
-                    <article key={item.title} className="badge">
-                      <div className={`badge-icon badge-${index + 1}`}>
-                        {item.title[0]}
-                      </div>
-                      <div>
-                        <p className="badge-title">{item.title}</p>
-                        <p className="badge-desc">{item.desc}</p>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </section>
-
-              <section className="profile-section">
-                <h3 className="section-title">Собранные карточки</h3>
-                {GAME_CARDS.filter((card) => collectedCards.has(card.id)).length ===
-                0 ? (
-                  <p className="collectible-empty">
-                    Пока нет собранных карточек. Отметь посещение на карте.
-                  </p>
-                ) : (
-                  <div className="cards collectibles">
-                    {GAME_CARDS.filter((card) => collectedCards.has(card.id)).map(
-                      (card) => (
-                        <article key={card.id} className="card collectible-card">
-                          <img
-                            className="collectible-photo"
-                            src={card.image}
-                            alt={card.title}
-                            loading="lazy"
-                          />
-                          <div className="collectible-head">
-                            <h3>{card.title}</h3>
-                            <span className="collectible-points">
-                              +{card.points} баллов
-                            </span>
-                          </div>
-                          <p>{card.desc}</p>
-                          <p className="collectible-info">{card.info}</p>
-                          <div className="character-card">
-                            <div>
-                              <p className="character-name">{card.character.name}</p>
-                              <p className="character-text">{card.character.text}</p>
-                            </div>
-                            <span className="character-chip">ИИ-персонаж</span>
-                          </div>
-                        </article>
-                      ),
-                    )}
-                  </div>
-                )}
-              </section>
-
-              <section className="profile-section">
-                <h3 className="section-title">Мои награды</h3>
-                {REWARDS.filter((reward) => purchasedRewards.has(reward.id)).length ===
-                0 ? (
-                  <p className="collectible-empty">
-                    Пока нет купленных наград. Загляни в раздел «Награды».
-                  </p>
-                ) : (
+                <section className="profile-section">
+                  <h3 className="section-title">Мои маршруты</h3>
                   <div className="cards">
-                    {REWARDS.filter((reward) => purchasedRewards.has(reward.id)).map(
-                      (reward) => (
-                        <article key={reward.id} className="card">
-                          <h3>{reward.title}</h3>
-                          <p>Оплачено: {reward.cost} баллов.</p>
-                        </article>
-                      ),
-                    )}
+                    {[
+                      'Исторический центр (8 точек)',
+                      'Квест по музеям (5 точек)',
+                      'Лесной маршрут Бубы (12 точек)',
+                    ].map((title) => (
+                      <article key={title} className="card">
+                        <h4>{title}</h4>
+                        <p>Статус: в процессе</p>
+                      </article>
+                    ))}
                   </div>
-                )}
-              </section>
+                </section>
 
-              <section className="profile-section">
-                <h3 className="section-title">Настройки профиля и данных</h3>
-                <form className="profile-form">
-                  <label>
-                    Имя
-                    <input
-                      type="text"
-                      placeholder="Ваше имя"
-                      value={profile.name}
-                      onChange={(event) =>
-                        setProfile((prev) => ({ ...prev, name: event.target.value }))
-                      }
-                    />
-                  </label>
-                  <label>
-                    Email
-                    <input
-                      type="email"
-                      placeholder="name@example.com"
-                      value={profile.email}
-                      onChange={(event) =>
-                        setProfile((prev) => ({ ...prev, email: event.target.value }))
-                      }
-                    />
-                  </label>
-                  <label>
-                    Город
-                    <input type="text" placeholder="Рязань" defaultValue="Рязань" />
-                  </label>
-                  <div className="profile-actions">
-                    <button className="primary" type="button">
-                      Сохранить изменения
-                    </button>
-                    <button className="ghost" type="button">
-                      Экспортировать данные
-                    </button>
+                <section className="profile-section">
+                  <h3 className="section-title">Мои достижения</h3>
+                  <div className="badge-grid">
+                    {[
+                      { title: 'Первооткрыватель', desc: '+100 баллов' },
+                      { title: 'Городской следопыт', desc: '5 маршрутов' },
+                      { title: 'Ночной исследователь', desc: 'вечерний квест' },
+                      { title: 'Летописец', desc: '10 QR-точек' },
+                      { title: 'Друзья Бубы', desc: 'семейный маршрут' },
+                    ].map((item, index) => (
+                      <article key={item.title} className="badge">
+                        <div className={`badge-icon badge-${index + 1}`}>
+                          {item.title[0]}
+                        </div>
+                        <div>
+                          <p className="badge-title">{item.title}</p>
+                          <p className="badge-desc">{item.desc}</p>
+                        </div>
+                      </article>
+                    ))}
                   </div>
-                </form>
-              </section>
+                </section>
+
+                <section className="profile-section">
+                  <h3 className="section-title">Собранные карточки</h3>
+                  {GAME_CARDS.filter((card) => collectedCards.has(card.id)).length ===
+                    0 ? (
+                    <p className="collectible-empty">
+                      Пока нет собранных карточек. Отметь посещение на карте.
+                    </p>
+                  ) : (
+                    <div className="cards collectibles">
+                      {GAME_CARDS.filter((card) => collectedCards.has(card.id)).map(
+                        (card) => (
+                          <article key={card.id} className="card collectible-card">
+                            <img
+                              className="collectible-photo"
+                              src={card.image}
+                              alt={card.title}
+                              loading="lazy"
+                              onError={(e) => { e.target.src = '/placeholder.png' }}
+                            />
+                            <div className="collectible-head">
+                              <h3>{card.title}</h3>
+                              <span className="collectible-points">
+                                +{card.points} баллов
+                              </span>
+                            </div>
+                            <p>{card.desc}</p>
+                            <p className="collectible-info">{card.info}</p>
+                            <div className="character-card">
+                              <div>
+                                <p className="character-name">{card.character.name}</p>
+                                <p className="character-text">{card.character.text}</p>
+                              </div>
+                              <span className="character-chip">ИИ-персонаж</span>
+                            </div>
+                          </article>
+                        ),
+                      )}
+                    </div>
+                  )}
+                </section>
+
+                <section className="profile-section">
+                  <h3 className="section-title">Мои награды</h3>
+                  {REWARDS.filter((reward) => purchasedRewards.has(reward.id)).length ===
+                    0 ? (
+                    <p className="collectible-empty">
+                      Пока нет купленных наград. Загляни в раздел «Награды».
+                    </p>
+                  ) : (
+                    <div className="cards">
+                      {REWARDS.filter((reward) => purchasedRewards.has(reward.id)).map(
+                        (reward) => (
+                          <article key={reward.id} className="card">
+                            <h3>{reward.title}</h3>
+                            <p>Оплачено: {reward.cost} баллов.</p>
+                          </article>
+                        ),
+                      )}
+                    </div>
+                  )}
+                </section>
               </PageShell>
             </Shell>
           }
@@ -1311,6 +1238,8 @@ function App() {
             </Shell>
           }
         />
+        <Route path="/campaign/:code/" element={<PoiWelcome />} />
+<Route path="/scan/:code/" element={<PoiWelcome />} />
         <Route
           path="/faq"
           element={
@@ -1451,6 +1380,7 @@ function App() {
                             className="collectible-photo"
                             src={matched.image}
                             alt={matched.title}
+                            onError={(e) => { e.target.src = '/placeholder.png' }}
                           />
                           <p className="collectible-info">{matched.info}</p>
                           <div className="character-card">
@@ -1477,31 +1407,31 @@ function App() {
                         <div className="qr-placeholder">QR</div>
                         <p>Сканируй QR, чтобы услышать историю персонажа.</p>
                       </div>
-                        <div className="collectible-actions">
-                          <button
-                            className="ghost"
-                            type="button"
-                            onClick={() =>
-                              matched &&
-                              matched.active &&
-                              handleQrScan({
-                                ...matched,
-                                coords: selectedPoi.coords || matched.coords,
-                              })
-                            }
-                            disabled={!matched || !matched.active}
-                          >
-                            Сканировать QR
-                          </button>
-                          <button
-                            className="primary"
-                            type="button"
-                            onClick={handlePoiCheckIn}
-                            disabled={collected || !matched || !matched.active}
-                          >
-                            {collected ? 'Уже собрано' : 'Я здесь!'}
-                          </button>
-                        </div>
+                      <div className="collectible-actions">
+                        <button
+                          className="ghost"
+                          type="button"
+                          onClick={() =>
+                            matched &&
+                            matched.active &&
+                            handleQrScan({
+                              ...matched,
+                              coords: selectedPoi.coords || matched.coords,
+                            })
+                          }
+                          disabled={!matched || !matched.active}
+                        >
+                          Сканировать QR
+                        </button>
+                        <button
+                          className="primary"
+                          type="button"
+                          onClick={handlePoiCheckIn}
+                          disabled={collected || !matched || !matched.active}
+                        >
+                          {collected ? 'Уже собрано' : 'Я здесь!'}
+                        </button>
+                      </div>
                       {activeNarrator?.startsWith(matched?.id || '') && (
                         <p className="collectible-status">Идёт озвучка персонажа…</p>
                       )}

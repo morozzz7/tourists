@@ -1,16 +1,18 @@
 from rest_framework import serializers
-from .models import QRCampaign, QRCodeLink
+from .models import PointOfInterest, POIQRCode
 
 
-class QRCampaignSerializer(serializers.ModelSerializer):
+class PointOfInterestSerializer(serializers.ModelSerializer):
     class Meta:
-        model = QRCampaign
-        fields = ["id", "name", "character", "description", "created_at"]
+        model = PointOfInterest
+        fields = "__all__"
 
 
-class QRCodeLinkSerializer(serializers.ModelSerializer):
-    campaign = QRCampaignSerializer()
+class POIQRCodeSerializer(serializers.ModelSerializer):
+    poi = PointOfInterestSerializer(read_only=True)
+    poi_id = serializers.UUIDField(write_only=True, required=False)
 
     class Meta:
-        model = QRCodeLink
-        fields = ["id", "code", "campaign", "scans", "created_at"]
+        model = POIQRCode
+        fields = ["id", "code", "poi", "poi_id", "scans", "created_at"]
+        read_only_fields = ["id", "code", "scans", "created_at"]

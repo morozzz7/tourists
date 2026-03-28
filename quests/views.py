@@ -2,103 +2,126 @@
 # А В КОНЕЦ ДОБАВЬТЕ ЭТО:
 
 from rest_framework import viewsets, status
-from rest_framework.decorators import api_view
-from rest_framework.decorators import action
+from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
 from django.contrib.auth.models import User
 from django.middleware.csrf import get_token
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
+from django.conf import settings
 import qrcode
 from io import BytesIO
 import base64
 import urllib.request
 import urllib.parse
+import math
 import json
-from .models import QRCampaign, QRCodeLink
-from .serializers import QRCampaignSerializer, QRCodeLinkSerializer
-from django.conf import settings
+import uuid
+
+from .models import PointOfInterest, POIQRCode
+from .serializers import PointOfInterestSerializer, POIQRCodeSerializer
 
 
-class QRCampaignViewSet(viewsets.ModelViewSet):
-    queryset = QRCampaign.objects.all()
-    serializer_class = QRCampaignSerializer
+class PointOfInterestViewSet(viewsets.ModelViewSet):
+    queryset = PointOfInterest.objects.all()
+    serializer_class = PointOfInterestSerializer
 
-    @action(detail=True, methods=["post"])
-    def generate_qr_codes(self, request, pk=None):
-        """Генерирует QR-коды для кампании"""
-        campaign = self.get_object()
-        quantity = request.data.get("quantity", 10)
+    @action(detail=True, methods=['post'])
+    def generate_qr(self, request, pk=None):
+        poi = self.get_object()
+        
+        # Генерируем уникальный код
+        code = f"{poi.id.hex[:8]}{uuid.uuid4().hex[:6]}"
+        
+        # ИСПРАВЛЕНО: ссылка на фронтенд, а не на бэкенд
+        frontend_url = 'http://localhost:5173'
+        qr_url = f"{frontend_url}/scan/{code}/"
 
-        qr_codes = []
-
-        for i in range(quantity):
-            code = f"{str(campaign.id).replace('-', '')[:8]}{i:04d}"
-            full_url = request.build_absolute_uri(f"/campaign/{code}/")
-            qr_url = f"{settings.FRONTEND_URL}/welcome/{code}"
-            qr = qrcode.QRCode(
-                version=1,
-                error_correction=qrcode.constants.ERROR_CORRECT_H,
-                box_size=10,
-                border=4,
-            )
-            qr.add_data(qr_url)
-            qr.make(fit=True)
-
-            img = qr.make_image(fill_color="black", back_color="white")
-
-            buffer = BytesIO()
-            img.save(buffer, format="PNG")
-            buffer.seek(0)
-
-            img_base64 = base64.b64encode(buffer.getvalue()).decode()
-
-            qr_link = QRCodeLink.objects.get_or_create(campaign=campaign, code=code)[0]
-
-            qr_codes.append(
-                {
-                    "id": str(qr_link.id),
-                    "code": code,
-                    "url": qr_url,
-                    "image": f"data:image/png;base64,{img_base64}",
-                }
-            )
-
-        return Response(
-            {"campaign": campaign.name, "qr_codes": qr_codes, "count": len(qr_codes)}
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=10,
+            border=4,
         )
+        qr.add_data(qr_url)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        buffer = BytesIO()
+        img.save(buffer, format="PNG")
+        img_base64 = base64.b64encode(buffer.getvalue()).decode()
+
+        qr_link = POIQRCode.objects.create(poi=poi, code=code)
+        POIQRCode.objects.create(poi=poi, code=code)
+        return Response({
+            'code': code,
+            'url': qr_url,
+            'image': f'data:image/png;base64,{img_base64}',
+            'poi_title': poi.title,  # ← добавили название
+        })
 
 
-class QRCodeLinkViewSet(viewsets.ModelViewSet):
-    queryset = QRCodeLink.objects.all()
-    serializer_class = QRCodeLinkSerializer
-
-    @action(detail=False, methods=["get"])
-    def by_code(self, request):
-        """Получает кампанию по коду из QR"""
-        code = request.query_params.get("code")
-
-        if not code:
-            return Response(
-                {"error": "Code required"}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        qr_link = get_object_or_404(QRCodeLink, code=code)
-        campaign = qr_link.campaign
-
+@api_view(["GET"])
+def poi_by_qr_code(request):
+    code = request.query_params.get("code")
+    if not code:
+        return Response({"error": "Code required"}, status=400)
+    try:
+        qr_link = POIQRCode.objects.get(code=code)
         qr_link.scans += 1
         qr_link.save()
+        serializer = PointOfInterestSerializer(qr_link.poi)
+        return Response(serializer.data)
+    except POIQRCode.DoesNotExist:
+        return Response({"error": "QR code not found"}, status=404)
 
-        return Response(
-            {
-                "campaign_id": str(campaign.id),
-                "character": campaign.character,
-                "name": campaign.name,
-                "description": campaign.description,
-                "scans": qr_link.scans,
-            }
-        )
+
+@api_view(["POST"])
+def poi_checkin_by_qr(request):
+    """Чекин по QR-коду"""
+    data = json.loads(request.body)
+    code = data.get("code")
+    user_lat = data.get("lat")
+    user_lng = data.get("lng")
+    
+    if not code:
+        return JsonResponse({"error": "Код QR не указан"}, status=400)
+    
+    try:
+        qr_link = POIQRCode.objects.get(code=code)
+        poi = qr_link.poi
+    except POIQRCode.DoesNotExist:
+        return JsonResponse({"error": "QR-код не найден"}, status=404)
+    
+    # Проверяем геолокацию, если переданы координаты
+    if user_lat is not None and user_lng is not None:
+        def haversine(lat1, lng1, lat2, lng2):
+            R = 6371000
+            phi1 = math.radians(lat1)
+            phi2 = math.radians(lat2)
+            dphi = math.radians(lat2 - lat1)
+            dlambda = math.radians(lng2 - lng1)
+            a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+            return R * c
+        
+        distance = haversine(user_lat, user_lng, poi.coords_lat, poi.coords_lng)
+        if distance > poi.radius:
+            return JsonResponse({
+                "error": f"Вы слишком далеко ({int(distance)} м). Подойдите ближе (нужно в радиусе {poi.radius} м)."
+            }, status=400)
+    
+    # Увеличиваем счётчик сканирований
+    qr_link.scans += 1
+    qr_link.save()
+    
+    return JsonResponse({
+        "message": f"Посещение подтверждено! +{poi.qr_points or poi.points} баллов.",
+        "poi_id": str(poi.id),
+        "points_added": poi.qr_points or poi.points
+    })
 
 
 @api_view(["GET"])
@@ -237,3 +260,66 @@ def me(request):
             "email": request.user.email,
         }
     )
+
+def haversine(lat1, lng1, lat2, lng2):
+    R = 6371000
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lng2 - lng1)
+    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+    c = 2*math.atan2(math.sqrt(a), math.sqrt(1-a))
+    return R * c
+
+@require_POST
+@login_required
+def poi_checkin(request):
+    """Эндпоинт для подтверждения посещения POI"""
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Неверный формат данных'}, status=400)
+    
+    poi_id = data.get('poi_id')
+    user_lat = data.get('lat')
+    user_lng = data.get('lng')
+    
+    if not poi_id or user_lat is None or user_lng is None:
+        return JsonResponse({'error': 'Недостаточно данных. Укажите poi_id, lat, lng'}, status=400)
+    
+    try:
+        from .models import PointOfInterest  # импортируйте здесь, если ещё не импортировали
+        poi = PointOfInterest.objects.get(id=poi_id)
+    except PointOfInterest.DoesNotExist:
+        return JsonResponse({'error': 'POI не найден'}, status=404)
+    
+    # Функция для расчёта расстояния
+    def haversine(lat1, lng1, lat2, lng2):
+        R = 6371000  # радиус Земли в метрах
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlambda = math.radians(lng2 - lng1)
+        a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+        return R * c
+    
+    distance = haversine(user_lat, user_lng, poi.coords_lat, poi.coords_lng)
+    
+    if distance > poi.radius:
+        return JsonResponse({
+            'error': f'Вы слишком далеко ({int(distance)} м от точки). Подойдите ближе (нужно в радиусе {poi.radius} м).'
+        }, status=400)
+    
+    # Здесь логика начисления баллов пользователю
+    # Например:
+    # user = request.user
+    # profile, created = UserProfile.objects.get_or_create(user=user)
+    # profile.points += poi.points
+    # profile.save()
+    
+    return JsonResponse({
+        'success': True,
+        'message': f'Посещение подтверждено! +{poi.points} баллов.',
+        'points_added': poi.points
+    })
