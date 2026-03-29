@@ -1,3 +1,4 @@
+// Карточки маршрутов с единым рендером в разных разделах.
 import React from 'react'
 
 const RouteCards = ({ routes, completedRoutes, onOpenRoute }) => {

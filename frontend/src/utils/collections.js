@@ -1,3 +1,4 @@
+// Утилиты для сериализации/десериализации коллекций в JSON.
 const parseSet = (value) => new Set(Array.isArray(value) ? value : [])
 
 const parseRouteStamps = (value) => {

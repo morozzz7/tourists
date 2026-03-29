@@ -1,3 +1,4 @@
+// Утилиты геометрии: расстояние и проверка попадания в границы.
 const toRadians = (value) => (value * Math.PI) / 180
 
 const getDistanceMeters = (from, to) => {

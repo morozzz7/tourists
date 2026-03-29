@@ -3,6 +3,9 @@ import { useEffect, useRef, useState } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import RyazanMap from './components/Map'
 import RouteCards from './components/RouteCards'
+import AuthModal from './components/AuthModal'
+import ChatDock from './components/ChatDock'
+import RouteModal from './components/RouteModal'
 import QRAdmin from './components/QRAdmin'
 import PoiWelcome from './components/PoiWelcome'
 import mascotImg from './assets/hero.png'
@@ -18,7 +21,7 @@ import {
 import { API_BASE, ensureCsrf, getCookie } from './services/apiClient'
 import { getDistanceMeters, isPointInBounds } from './utils/geo'
 import { formatNumber, normalizeName } from './utils/text'
-import { parseSet, parseRouteStamps, serializeRouteStamps } from './utils/collections'
+import useProgress from './hooks/useProgress'
 import './App.css'
 
 const demoMessages = [
@@ -32,8 +35,9 @@ const GUEST_POINTS = 1240
 const DEMO_CARD_ID = 'poi-esenin'
 
 const calculateLevel = (points) => Math.floor(points / 500) + 1
-const DISABLE_GEO_CHECK = false
-const DISABLE_GEO_WATCH = false
+// Включите геопроверки и наблюдение, когда будете готовы к полевым тестам.
+const DISABLE_GEO_CHECK = true
+const DISABLE_GEO_WATCH = true
 
 const PageShell = ({ title, subtitle, children }) => (
   <div className="page page-standalone">
@@ -418,8 +422,23 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia('(min-width: 901px)').matches : true,
   )
-  const [points, setPoints] = useState(GUEST_POINTS)
-  const [collectedCards, setCollectedCards] = useState(new Set())
+  const {
+    points,
+    setPoints,
+    collectedCards,
+    setCollectedCards,
+    purchasedRewards,
+    setPurchasedRewards,
+    myRoutes,
+    setMyRoutes,
+    activeRouteId,
+    setActiveRouteId,
+    routeStamps,
+    setRouteStamps,
+    completedRoutes,
+    setCompletedRoutes,
+    resetToGuest,
+  } = useProgress({ user, guestPoints: GUEST_POINTS })
   const [checkinStatus, setCheckinStatus] = useState({})
   const [userLocation, setUserLocation] = useState(null)
   const [locationStatus, setLocationStatus] = useState('idle')
@@ -430,15 +449,7 @@ function App() {
   const [_scannedCards, setScannedCards] = useState(new Set())
   const [capturedTerritories, setCapturedTerritories] = useState(new Set())
   const audioRef = useRef(null)
-  const [purchasedRewards, setPurchasedRewards] = useState(new Set())
   const [selectedRoute, setSelectedRoute] = useState(null)
-  const [myRoutes, setMyRoutes] = useState(new Set())
-  const [activeRouteId, setActiveRouteId] = useState(null)
-  const [routeStamps, setRouteStamps] = useState({})
-  const [completedRoutes, setCompletedRoutes] = useState(new Set())
-  const [progressReady, setProgressReady] = useState(false)
-  const saveTimerRef = useRef(null)
-  const lastSavedRef = useRef('')
   const level = calculateLevel(points)
   const nextLevelAt = level * 500
   const pointsToNext = Math.max(nextLevelAt - points, 0)
@@ -507,60 +518,6 @@ function App() {
     return () => navigator.geolocation.clearWatch(watchId)
   }, [])
 
-  const resetProgressToGuest = () => {
-    setPoints(GUEST_POINTS)
-    setCollectedCards(new Set())
-    setPurchasedRewards(new Set())
-    setMyRoutes(new Set())
-    setCompletedRoutes(new Set())
-    setRouteStamps({})
-    setActiveRouteId(null)
-  }
-
-  const applyProgress = (data) => {
-    setPoints(typeof data?.points === 'number' ? data.points : 0)
-    setCollectedCards(parseSet(data?.collected_cards))
-    setPurchasedRewards(parseSet(data?.purchased_rewards))
-    setMyRoutes(parseSet(data?.started_routes))
-    setCompletedRoutes(parseSet(data?.completed_routes))
-    setRouteStamps(parseRouteStamps(data?.route_stamps))
-    setActiveRouteId(data?.active_route_id || null)
-  }
-
-  const buildProgressPayload = () => ({
-    points,
-    collected_cards: Array.from(collectedCards),
-    purchased_rewards: Array.from(purchasedRewards),
-    started_routes: Array.from(myRoutes),
-    completed_routes: Array.from(completedRoutes),
-    route_stamps: serializeRouteStamps(routeStamps),
-    active_route_id: activeRouteId || '',
-  })
-
-  const loadProgress = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/api/progress/`, {
-        credentials: 'include',
-      })
-      if (!response.ok) return
-      const data = await response.json()
-      applyProgress(data)
-      const serialized = JSON.stringify({
-        points: typeof data?.points === 'number' ? data.points : 0,
-        collected_cards: Array.isArray(data?.collected_cards) ? data.collected_cards : [],
-        purchased_rewards: Array.isArray(data?.purchased_rewards) ? data.purchased_rewards : [],
-        started_routes: Array.isArray(data?.started_routes) ? data.started_routes : [],
-        completed_routes: Array.isArray(data?.completed_routes) ? data.completed_routes : [],
-        route_stamps: typeof data?.route_stamps === 'object' && data?.route_stamps ? data.route_stamps : {},
-        active_route_id: data?.active_route_id || '',
-      })
-      lastSavedRef.current = serialized
-      setProgressReady(true)
-    } catch {
-      // ignore
-    }
-  }
-
   useEffect(() => {
     const fetchMe = async () => {
       try {
@@ -579,16 +536,6 @@ function App() {
     }
     fetchMe()
   }, [])
-
-  useEffect(() => {
-    if (!user) {
-      setProgressReady(false)
-      lastSavedRef.current = ''
-      return
-    }
-    setProgressReady(false)
-    loadProgress()
-  }, [user?.email])
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))
@@ -697,51 +644,6 @@ function App() {
     setModalType(null)
   }
 
-  useEffect(() => {
-    if (!user || !progressReady) return undefined
-    const payload = buildProgressPayload()
-    const serialized = JSON.stringify(payload)
-    if (serialized === lastSavedRef.current) return undefined
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current)
-    }
-    saveTimerRef.current = setTimeout(async () => {
-      try {
-        await ensureCsrf()
-        const csrf = getCookie('csrftoken')
-        const response = await fetch(`${API_BASE}/api/progress/`, {
-          method: 'PUT',
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrf || '',
-          },
-          body: serialized,
-        })
-        if (response.ok) {
-          lastSavedRef.current = serialized
-        }
-      } catch {
-        // ignore
-      }
-    }, 500)
-    return () => {
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current)
-      }
-    }
-  }, [
-    user,
-    progressReady,
-    points,
-    collectedCards,
-    purchasedRewards,
-    myRoutes,
-    completedRoutes,
-    routeStamps,
-    activeRouteId,
-  ])
-
   const handleAuth = async () => {
     setAuthLoading(true)
     setAuthError(null)
@@ -792,12 +694,7 @@ function App() {
       })
       setUser(null)
       setProfile({ name: '', email: '' })
-      resetProgressToGuest()
-      setProgressReady(false)
-      lastSavedRef.current = ''
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current)
-      }
+      resetToGuest()
     } catch {
       // ignore
     }
@@ -1487,75 +1384,18 @@ function App() {
             </button>
 
             {modalType === 'register' && (
-              <div className="modal-body">
-                <div className="modal-head">
-                  <h3>{authMode === 'register' ? 'Регистрация' : 'Вход'}</h3>
-                  <div className="modal-switch">
-                    <button
-                      className={`ghost ${authMode === 'register' ? 'active' : ''}`}
-                      type="button"
-                      onClick={() => setAuthMode('register')}
-                    >
-                      Регистрация
-                    </button>
-                    <button
-                      className={`ghost ${authMode === 'login' ? 'active' : ''}`}
-                      type="button"
-                      onClick={() => setAuthMode('login')}
-                    >
-                      Вход
-                    </button>
-                  </div>
-                </div>
-                <p className="modal-subtitle">
-                  {authMode === 'register'
-                    ? 'Создай профиль, чтобы сохранять прогресс и баллы.'
-                    : 'Войди, чтобы продолжить путешествие.'}
-                </p>
-                <form className="modal-form">
-                  {authMode === 'register' && (
-                    <input
-                      type="text"
-                      placeholder="Имя"
-                      autoComplete="name"
-                      value={profile.name}
-                      onChange={(event) =>
-                        setProfile((prev) => ({ ...prev, name: event.target.value }))
-                      }
-                    />
-                  )}
-                  <input
-                    type="email"
-                    placeholder="Email"
-                    autoComplete="email"
-                    value={profile.email}
-                    onChange={(event) =>
-                      setProfile((prev) => ({ ...prev, email: event.target.value }))
-                    }
-                  />
-                  <input
-                    type="password"
-                    placeholder="Пароль"
-                    autoComplete={authMode === 'register' ? 'new-password' : 'current-password'}
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                  />
-                  <button
-                    className="primary"
-                    type="button"
-                    onClick={handleAuth}
-                    disabled={authLoading}
-                  >
-                    {authLoading
-                      ? 'Подождите...'
-                      : authMode === 'register'
-                        ? 'Создать аккаунт'
-                        : 'Войти'}
-                  </button>
-                  {authStatus && <p className="modal-success">{authStatus}</p>}
-                  {authError && <p className="modal-error">{authError}</p>}
-                </form>
-              </div>
+              <AuthModal
+                authMode={authMode}
+                setAuthMode={setAuthMode}
+                profile={profile}
+                setProfile={setProfile}
+                password={password}
+                setPassword={setPassword}
+                authLoading={authLoading}
+                authStatus={authStatus}
+                authError={authError}
+                onSubmit={handleAuth}
+              />
             )}
 
             {modalType === 'legend' && (
@@ -1576,106 +1416,18 @@ function App() {
             )}
 
             {modalType === 'route' && selectedRoute && (
-              <div className="modal-body route-modal">
-                <div className="modal-head">
-                  <h3>{selectedRoute.title}</h3>
-                  <p className="modal-subtitle">{selectedRoute.subtitle}</p>
-                </div>
-                <p className="modal-subtitle">{selectedRoute.summary}</p>
-                <div className="route-actions">
-                  {!myRoutes.has(selectedRoute.id) && (
-                    <button
-                      className="ghost"
-                      type="button"
-                      onClick={() => handleAddRoute(selectedRoute.id)}
-                      disabled={completedRoutes.has(selectedRoute.id)}
-                    >
-                      Добавить к себе
-                    </button>
-                  )}
-                  {activeRouteId !== selectedRoute.id && (
-                    <button
-                      className="primary"
-                      type="button"
-                      onClick={() => handleStartRoute(selectedRoute.id)}
-                      disabled={completedRoutes.has(selectedRoute.id)}
-                    >
-                      {completedRoutes.has(selectedRoute.id)
-                        ? 'Маршрут завершен'
-                        : 'Начать маршрут'}
-                    </button>
-                  )}
-                  {activeRouteId === selectedRoute.id && (
-                    <button
-                      className="ghost"
-                      type="button"
-                      onClick={() => setActiveRouteId(null)}
-                    >
-                      Пауза
-                    </button>
-                  )}
-                </div>
-                <div className="route-stops">
-                  {selectedRoute.stops.map((stop) => {
-                    const stamps = getRouteStamps(selectedRoute.id)
-                    const checked = stamps.has(stop.id)
-                    const disabled = activeRouteId !== selectedRoute.id || !stop.inRoute
-                    return (
-                      <label
-                        key={stop.id}
-                        className={`route-stop ${stop.inRoute ? '' : 'route-stop-muted'}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={disabled}
-                          onChange={() => toggleRouteStamp(selectedRoute.id, stop.id)}
-                        />
-                        <div>
-                          <p className="route-stop-title">{stop.name}</p>
-                          <p className="route-stop-meta">{stop.address}</p>
-                          {stop.note && (
-                            <p className="route-stop-note">{stop.note}</p>
-                          )}
-                          {!stop.inRoute && (
-                            <p className="route-stop-note">
-                              Не входит в маршрут, только отметка на карте.
-                            </p>
-                          )}
-                        </div>
-                      </label>
-                    )
-                  })}
-                </div>
-                {(() => {
-                  const requiredStops = selectedRoute.stops.filter((stop) => stop.inRoute)
-                  const stamps = getRouteStamps(selectedRoute.id)
-                  const completed = selectedRoute.isDemo
-                    ? true
-                    : requiredStops.every((stop) => stamps.has(stop.id))
-                  const alreadyCompleted = completedRoutes.has(selectedRoute.id)
-                  const stampsCount = selectedRoute.isDemo
-                    ? requiredStops.length
-                    : stamps.size
-                  return (
-                    <div className="route-complete">
-                      <p>
-                        Штампы: {stampsCount} / {requiredStops.length}
-                      </p>
-                      <button
-                        className="primary"
-                        type="button"
-                        disabled={!completed || alreadyCompleted}
-                        onClick={() => handleCompleteRoute(selectedRoute)}
-                      >
-                        {alreadyCompleted
-                          ? 'Маршрут завершен'
-                          : `Завершить и получить +${selectedRoute.rewardPoints}`}
-                      </button>
-                    </div>
-                  )
-                })()}
-              </div>
+              <RouteModal
+                selectedRoute={selectedRoute}
+                myRoutes={myRoutes}
+                completedRoutes={completedRoutes}
+                activeRouteId={activeRouteId}
+                getRouteStamps={getRouteStamps}
+                onAddRoute={handleAddRoute}
+                onStartRoute={handleStartRoute}
+                onPauseRoute={() => setActiveRouteId(null)}
+                onToggleStamp={toggleRouteStamp}
+                onCompleteRoute={handleCompleteRoute}
+              />
             )}
 
             {modalType === 'poi' && selectedPoi && (
@@ -1769,50 +1521,15 @@ function App() {
         </div>
       )}
 
-      <div className={`chat-dock ${chatOpen ? 'open' : ''}`}>
-        <button
-          className="chat-fab"
-          onClick={() => setChatOpen((prev) => !prev)}
-          aria-label="Открыть чат с помощником"
-        >
-          <img src={mascotImg} alt="" />
-        </button>
-        <div className="chat-panel">
-          <header className="chat-header">
-            <div>
-              <p className="chat-title">AI-помощник</p>
-              <p className="chat-subtitle">Спроси про маршруты или баллы</p>
-            </div>
-            <button className="chat-close" onClick={() => setChatOpen(false)}>
-              Закрыть
-            </button>
-          </header>
-          <div className="chat-body">
-            {messages.map((message, index) => (
-              <div
-                key={`${message.from}-${index}`}
-                className={`chat-bubble ${message.from}`}
-              >
-                {message.text}
-              </div>
-            ))}
-          </div>
-          <div className="chat-input">
-            <input
-              type="text"
-              placeholder="Напишите сообщение..."
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') handleSend()
-              }}
-            />
-            <button className="primary" onClick={handleSend}>
-              Отправить
-            </button>
-          </div>
-        </div>
-      </div>
+      <ChatDock
+        chatOpen={chatOpen}
+        setChatOpen={setChatOpen}
+        messages={messages}
+        input={input}
+        setInput={setInput}
+        onSend={handleSend}
+        mascotImg={mascotImg}
+      />
     </Router>
   )
 }
