@@ -28,13 +28,15 @@ const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.openstreetmap.ru/api/interpreter',
 ]
-const CACHE_KEY = 'ryazan-poi-cache-v1'
+const CACHE_KEY = 'ryazan-poi-cache-v2'
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000
 const WIKI_CACHE_KEY = 'ryazan-wiki-summary-v1'
 const WIKI_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const YANDEX_LANG = 'ru_RU'
 const WIKI_SUMMARY_ENDPOINT = 'https://ru.wikipedia.org/api/rest_v1/page/summary/'
 const WIKI_SEARCH_ENDPOINT = 'https://ru.wikipedia.org/w/rest.php/v1/search/page'
+const ESENIN_COORDS = [54.6366, 39.7495]
+
 const FALLBACK_LOCATIONS = [
   {
     id: 'fallback-1',
@@ -47,7 +49,7 @@ const FALLBACK_LOCATIONS = [
     id: 'fallback-2',
     name: 'Памятник Есенину',
     category: 'monument',
-    coords: [54.636, 39.747],
+    coords: ESENIN_COORDS,
     tags: {},
   },
   {
@@ -233,7 +235,9 @@ const RyazanMap = ({
   const [locations, setLocations] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [provider, setProvider] = useState('yandex')
+  const [provider, setProvider] = useState(
+    YANDEX_API_KEY ? 'yandex' : 'leaflet',
+  )
   const [wikiById, setWikiById] = useState({})
   const [yandexReady, setYandexReady] = useState(false)
   const yandexContainerRef = useRef(null)
@@ -252,6 +256,12 @@ const RyazanMap = ({
     (effectiveCaptured.size / TERRITORIES.length) * 100,
   )
   const routeLinePoints = routePath.filter((point) => Array.isArray(point))
+
+  useEffect(() => {
+    if (!YANDEX_API_KEY && provider === 'yandex') {
+      setProvider('leaflet')
+    }
+  }, [provider])
 
   useEffect(() => {
     const fetchPoi = async () => {
@@ -307,7 +317,10 @@ const RyazanMap = ({
               id: el.id,
               name,
               category,
-              coords: [el.lat, el.lon],
+              coords:
+                name.toLowerCase().includes('есенин')
+                  ? ESENIN_COORDS
+                  : [el.lat, el.lon],
               tags: el.tags || {},
             }
           })

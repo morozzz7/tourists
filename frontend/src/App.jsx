@@ -16,6 +16,7 @@ const demoMessages = [
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 const GUEST_POINTS = 1240
+const DEMO_CARD_ID = 'poi-esenin'
 
 const formatNumber = (value) => value.toLocaleString('ru-RU')
 const calculateLevel = (points) => Math.floor(points / 500) + 1
@@ -609,8 +610,10 @@ const FullMapPage = ({
   locationStatus,
   locationError,
   autoCapturedIds,
+  onOpenRoute,
   routeStops,
   routePath,
+  completedRoutes,
 }) => {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams();
@@ -659,7 +662,7 @@ const FullMapPage = ({
   }, [poiId, onSelectPoi, navigate, openedPoiId])
 
   return (
-    <div className="map-page map-page-full">
+    <div className="map-page">
       <div className="map-page-header">
         <div>
           <p className="eyebrow">Карта</p>
@@ -681,6 +684,32 @@ const FullMapPage = ({
           routePath={routePath}
         />
       </div>
+      <section className="page">
+        <header>
+          <p className="eyebrow">Маршруты</p>
+          <h2>Выбери экскурсию</h2>
+          <p>Сравни маршруты и открой подробности одним кликом.</p>
+        </header>
+        <div className="cards">
+          {ROUTES.filter((route) => !completedRoutes.has(route.id)).map((route) => (
+            <article key={route.id} className="card route-card">
+              <h3>{route.title}</h3>
+              <p>{route.subtitle}</p>
+              <div className="card-tags">
+                <span>{route.stops.filter((stop) => stop.inRoute).length} точек</span>
+                <span>+{route.rewardPoints} баллов</span>
+              </div>
+              <button
+                className="ghost"
+                type="button"
+                onClick={() => onOpenRoute(route)}
+              >
+                Подробнее
+              </button>
+            </article>
+          ))}
+        </div>
+      </section>
     </div>
   )
 }
@@ -1357,12 +1386,19 @@ function App() {
   }
 
   const handleCheckIn = (card) => {
-    if (collectedCards.has(card.id)) {
+    if (collectedCards.has(card.id) && card.id !== DEMO_CARD_ID) {
       setCheckinStatus((prev) => ({
         ...prev,
         [card.id]: 'Эта карточка уже собрана.',
       }))
       return false
+    }
+    if (card.id === DEMO_CARD_ID && collectedCards.has(card.id)) {
+      setCheckinStatus((prev) => ({
+        ...prev,
+        [card.id]: 'Демо: карточка снова засчитана.',
+      }))
+      return true
     }
     if (!userLocation && !DISABLE_GEO_CHECK) {
       setCheckinStatus((prev) => ({
@@ -1377,7 +1413,7 @@ function App() {
         lat: card.coords[0],
         lng: card.coords[1],
       })
-    if (distance <= card.radius) {
+    if (distance <= card.radius || card.id === DEMO_CARD_ID) {
       setCollectedCards((prev) => {
         const next = new Set(prev)
         next.add(card.id)
@@ -1552,8 +1588,10 @@ function App() {
                 locationStatus={locationStatus}
                 locationError={locationError}
                 autoCapturedIds={capturedTerritories}
+                onOpenRoute={(route) => openModal('route', route)}
                 routeStops={activeRouteStops}
                 routePath={activeRoutePath}
+                completedRoutes={completedRoutes}
               />
             </Shell>
           }

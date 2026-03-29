@@ -1429,7 +1429,7 @@ h1 {
     display: block;
     position: fixed;
     inset: 0;
-    z-index: 350;
+    z-index: 2900;
     background: rgba(0, 0, 0, 0.38);
   }
 
@@ -1440,7 +1440,7 @@ h1 {
     position: fixed;
     top: 14px;
     left: 14px;
-    z-index: 300;
+    z-index: 3000;
     padding: 10px 14px;
     border-radius: 999px;
     border: 1px solid var(--border-soft);
