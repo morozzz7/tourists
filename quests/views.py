@@ -5,24 +5,19 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from django.http import HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
 from django.contrib.auth.models import User
 from django.middleware.csrf import get_token
-from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_POST
-from django.conf import settings
 import qrcode
 from io import BytesIO
 import base64
 import urllib.request
-import urllib.parse
-import math
 import json
 import uuid
 
 from .models import PointOfInterest, POIQRCode, UserProgress
-from .serializers import PointOfInterestSerializer, POIQRCodeSerializer
+from .serializers import PointOfInterestSerializer, POIQRCodeSerializer, UserProgressSerializer
+from .utils.geo import haversine_meters
 
 
 class PointOfInterestViewSet(viewsets.ModelViewSet):
@@ -96,17 +91,7 @@ def poi_checkin_by_qr(request):
     
     # Проверяем геолокацию, если переданы координаты
     if user_lat is not None and user_lng is not None:
-        def haversine(lat1, lng1, lat2, lng2):
-            R = 6371000
-            phi1 = math.radians(lat1)
-            phi2 = math.radians(lat2)
-            dphi = math.radians(lat2 - lat1)
-            dlambda = math.radians(lng2 - lng1)
-            a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
-            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-            return R * c
-        
-        distance = haversine(user_lat, user_lng, poi.coords_lat, poi.coords_lng)
+        distance = haversine_meters(user_lat, user_lng, poi.coords_lat, poi.coords_lng)
         if distance > poi.radius:
             return JsonResponse({
                 "error": f"Вы слишком далеко ({int(distance)} м). Подойдите ближе (нужно в радиусе {poi.radius} м)."
@@ -261,18 +246,6 @@ def me(request):
     )
 
 
-def _serialize_progress(progress: UserProgress):
-    return {
-        "points": progress.points,
-        "collected_cards": progress.collected_cards or [],
-        "purchased_rewards": progress.purchased_rewards or [],
-        "started_routes": progress.started_routes or [],
-        "completed_routes": progress.completed_routes or [],
-        "route_stamps": progress.route_stamps or {},
-        "active_route_id": progress.active_route_id or "",
-    }
-
-
 @api_view(["GET", "PUT", "PATCH"])
 def user_progress(request):
     if not request.user.is_authenticated:
@@ -281,26 +254,13 @@ def user_progress(request):
     progress, _ = UserProgress.objects.get_or_create(user=request.user)
 
     if request.method == "GET":
-        return Response(_serialize_progress(progress))
+        serializer = UserProgressSerializer(progress)
+        return Response(serializer.data)
 
-    payload = request.data or {}
-    if "points" in payload:
-        progress.points = int(payload.get("points") or 0)
-    if "collected_cards" in payload and isinstance(payload.get("collected_cards"), list):
-        progress.collected_cards = payload.get("collected_cards")
-    if "purchased_rewards" in payload and isinstance(payload.get("purchased_rewards"), list):
-        progress.purchased_rewards = payload.get("purchased_rewards")
-    if "started_routes" in payload and isinstance(payload.get("started_routes"), list):
-        progress.started_routes = payload.get("started_routes")
-    if "completed_routes" in payload and isinstance(payload.get("completed_routes"), list):
-        progress.completed_routes = payload.get("completed_routes")
-    if "route_stamps" in payload and isinstance(payload.get("route_stamps"), dict):
-        progress.route_stamps = payload.get("route_stamps")
-    if "active_route_id" in payload:
-        progress.active_route_id = payload.get("active_route_id") or ""
-
-    progress.save()
-    return Response(_serialize_progress(progress))
+    serializer = UserProgressSerializer(progress, data=request.data, partial=True)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+    return Response(serializer.data)
 
 def haversine(lat1, lng1, lat2, lng2):
     R = 6371000

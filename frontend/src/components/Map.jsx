@@ -10,6 +10,7 @@ import {
 } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
+import TERRITORIES from '../data/territories'
 
 // Fix for default marker icons in Leaflet + React
 delete L.Icon.Default.prototype._getIconUrl
@@ -59,14 +60,6 @@ const FALLBACK_LOCATIONS = [
     coords: [54.6288, 39.7345],
     tags: {},
   },
-]
-const TERRITORIES = [
-  { id: 't1', name: 'Кремль', bounds: [[54.633, 39.742], [54.638, 39.752]] },
-  { id: 't2', name: 'Соборная', bounds: [[54.629, 39.737], [54.634, 39.746]] },
-  { id: 't3', name: 'Набережная', bounds: [[54.625, 39.731], [54.631, 39.739]] },
-  { id: 't4', name: 'ЦПКиО', bounds: [[54.624, 39.742], [54.629, 39.751]] },
-  { id: 't5', name: 'Музейный квартал', bounds: [[54.631, 39.752], [54.636, 39.760]] },
-  { id: 't6', name: 'Лыбедский бульвар', bounds: [[54.626, 39.724], [54.632, 39.733]] },
 ]
 
 const fetchFromOverpass = async (query) => {

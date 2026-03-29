@@ -2,9 +2,23 @@
 import { useEffect, useRef, useState } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import RyazanMap from './components/Map'
+import RouteCards from './components/RouteCards'
 import QRAdmin from './components/QRAdmin'
 import PoiWelcome from './components/PoiWelcome'
 import mascotImg from './assets/hero.png'
+import TERRITORIES from './data/territories'
+import {
+  GAME_CARDS,
+  REWARDS,
+  ROUTES,
+  LEVELS,
+  POINTS_SOURCES,
+  REWARD_TIERS,
+} from './data/gameData'
+import { API_BASE, ensureCsrf, getCookie } from './services/apiClient'
+import { getDistanceMeters, isPointInBounds } from './utils/geo'
+import { formatNumber, normalizeName } from './utils/text'
+import { parseSet, parseRouteStamps, serializeRouteStamps } from './utils/collections'
 import './App.css'
 
 const demoMessages = [
@@ -14,512 +28,12 @@ const demoMessages = [
   },
 ]
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 const GUEST_POINTS = 1240
 const DEMO_CARD_ID = 'poi-esenin'
 
-const formatNumber = (value) => value.toLocaleString('ru-RU')
 const calculateLevel = (points) => Math.floor(points / 500) + 1
 const DISABLE_GEO_CHECK = false
 const DISABLE_GEO_WATCH = false
-const normalizeName = (value) =>
-  String(value || '')
-    .toLowerCase()
-    .replace(/[ё]/g, 'е')
-    .replace(/[^a-zа-я0-9 ]/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-const toRadians = (value) => (value * Math.PI) / 180
-const getDistanceMeters = (from, to) => {
-  const R = 6371000
-  const dLat = toRadians(to.lat - from.lat)
-  const dLon = toRadians(to.lng - from.lng)
-  const lat1 = toRadians(from.lat)
-  const lat2 = toRadians(to.lat)
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2
-  return 2 * R * Math.asin(Math.sqrt(a))
-}
-
-const TERRITORIES = [
-  { id: 't1', name: 'Кремль', bounds: [[54.633, 39.742], [54.638, 39.752]] },
-  { id: 't2', name: 'Соборная', bounds: [[54.629, 39.737], [54.634, 39.746]] },
-  { id: 't3', name: 'Набережная', bounds: [[54.625, 39.731], [54.631, 39.739]] },
-  { id: 't4', name: 'ЦПКиО', bounds: [[54.624, 39.742], [54.629, 39.751]] },
-  { id: 't5', name: 'Музейный квартал', bounds: [[54.631, 39.752], [54.636, 39.760]] },
-  { id: 't6', name: 'Лыбедский бульвар', bounds: [[54.626, 39.724], [54.632, 39.733]] },
-]
-
-const GAME_CARDS = [
-  {
-    id: 'poi-kremlin',
-    title: 'Рязанский Кремль',
-    desc: 'Собери карту кремля и открой историческую хронику.',
-    info: 'Главный исторический комплекс города с соборами, колокольней и панорамой на Оку.',
-    coords: [54.6348, 39.7486],
-    points: 120,
-    qrPoints: 20,
-    radius: 160,
-    image: '/images/kremlin.jpg',
-    character: {
-      name: 'Гид Федот',
-      text: 'Добро пожаловать в сердце древней Рязани! Посмотри вверх — колокольня хранит сотни лет историй.',
-      voice: { rate: 1, pitch: 0.9 },
-    },
-    active: true,
-  },
-  {
-    id: 'poi-esenin',
-    title: 'Памятник Есенину',
-    desc: 'Слушай стихи, чтобы открыть редкую карточку.',
-    info: 'Монумент поэту у набережной — любимая точка прогулок и городских маршрутов.',
-    coords: [54.636, 39.747],
-    points: 90,
-    qrPoints: 25,
-    radius: 140,
-    image:
-      '/images/esenin.jpg',
-    character: {
-      name: 'Сергей Есенин',
-      text: 'Ты здесь — и строки оживают. Вдохни воздух Оки и запомни этот вид.',
-      voice: { rate: 1.05, pitch: 1.2 },
-    },
-    active: true,
-  },
-  {
-    id: 'poi-mushrooms',
-    title: 'Грибы с глазами',
-    desc: 'Найди арт-объект и получи бонус за фото.',
-    info: 'Городская легенда и любимое место для фото: улыбчивые грибы охраняют район.',
-    coords: [54.6288, 39.7345],
-    points: 70,
-    qrPoints: 15,
-    radius: 120,
-    image: '/images/mushrooms.jpg',
-    character: {
-      name: 'Буба',
-      text: 'Эти грибы с глазами знают все тайные тропы. Сделай фото и получи дружескую улыбку!',
-      voice: { rate: 0.95, pitch: 1.15 },
-    },
-    active: true,
-  },
-  {
-    id: 'poi-pochtovaya',
-    title: 'Почтовая улица',
-    desc: 'Прогулка по самой атмосферной улице города.',
-    info: 'Пешеходная артерия с историческими фасадами, музыкантами и кофейнями.',
-    coords: [54.6299, 39.7365],
-    points: 80,
-    qrPoints: 20,
-    radius: 140,
-    image: '/images/post.jpg',
-    character: {
-      name: 'Курьер Сева',
-      text: 'Здесь каждый дом — как открытка. Прислушайся к уличным историям.',
-      voice: { rate: 0.98, pitch: 0.95 },
-    },
-    active: true,
-  },
-  {
-    id: 'poi-drama',
-    title: 'Театр драмы',
-    desc: 'Сцена, где оживают истории Рязани.',
-    info: 'Один из старейших театров страны и главный культурный маяк центра.',
-    coords: [54.6292, 39.7322],
-    points: 100,
-    qrPoints: 25,
-    radius: 150,
-    image: '/images/drama.jpg',
-    character: {
-      name: 'Режисёр Алена',
-      text: 'Театр — место, где город говорит со сцены. Загляни внутрь и почувствуй магию.',
-      voice: { rate: 1.02, pitch: 1.05 },
-    },
-    active: true,
-  },
-]
-
-const REWARDS = [
-  { id: 'reward-coffee', title: 'Кофе и выпечка', cost: 200 },
-  { id: 'reward-bike', title: 'Прокат велосипедов', cost: 350 },
-  { id: 'reward-museum', title: 'Билет в музей', cost: 500 },
-]
-
-const ROUTES = [
-  {
-    id: 'demo-route',
-    title: 'Демо-маршрут: Кремль и набережная',
-    subtitle: 'Короткая прогулка, можно завершить сразу',
-    rewardPoints: 200,
-    summary:
-      'Пробный маршрут, чтобы познакомиться с механикой штампов и наград. Подходит для быстрого старта и теста интерфейса.',
-    isDemo: true,
-    showOnMap: true,
-    stops: [
-      {
-        id: 'd1',
-        name: 'Рязанский Кремль',
-        address: 'Кремль',
-        coords: [54.6348, 39.7486],
-        inRoute: true,
-      },
-      {
-        id: 'd2',
-        name: 'Памятник Есенину',
-        address: 'Трубежная набережная',
-        coords: [54.636, 39.747],
-        inRoute: true,
-      },
-      {
-        id: 'd3',
-        name: 'Грибы с глазами',
-        address: 'ул. Ленина, 24',
-        coords: [54.6288, 39.7345],
-        inRoute: true,
-      },
-      {
-        id: 'd4',
-        name: 'Улица Почтовая',
-        address: 'ул. Почтовая',
-        coords: [54.6299, 39.7365],
-        inRoute: true,
-      },
-    ],
-  },
-  {
-    id: 'mushroom-trail',
-    title: 'Экскурсия 1. Грибной маршрут',
-    subtitle: 'Бронзовые грибы и городские легенды',
-    rewardPoints: 500,
-    summary:
-      'По всему центру Рязани и даже в отдаленных районах разбросаны маленькие бронзовые грибы. Их не так просто заметить — они прячутся на набережных, у библиотек, в скверах и во дворах. Суть квеста простая — найти их всех. Это отличный повод неспешно прогуляться по городу, заглянуть в места, куда обычно не доходят туристы, и сделать несколько забавных фото.',
-    stops: [
-      {
-        id: 'm1',
-        name: 'Гриб-Мудрец',
-        address:
-          'Первомайский пр-кт 74 корп.1, перед Центральной городской библиотекой имени Сергея Есенина',
-        inRoute: true,
-      },
-      {
-        id: 'm2',
-        name: 'Грибная капелла',
-        address: 'Первомайский пр-кт 68/2, площадь Победы, перед МКЦ',
-        inRoute: true,
-      },
-      {
-        id: 'm3',
-        name: 'Гриб-Путешественик',
-        address: 'Первомайский пр-кт 54, перед конгресс-отелем «Амакс»',
-        inRoute: true,
-      },
-      {
-        id: 'm4',
-        name: 'Гриб-Коробейник',
-        address: 'Площадь Ленина, перед Торговыми рядами на ул. Кольцова',
-        inRoute: true,
-      },
-      {
-        id: 'm5',
-        name: 'Гриб-Художник',
-        address: 'Трубежная набережная рядом с памятником С.А. Есенину',
-        inRoute: true,
-      },
-      {
-        id: 'm6',
-        name: 'Гриб-Дозорный',
-        address: 'Соборный бульвар, вблизи Глебовского моста',
-        inRoute: true,
-      },
-      {
-        id: 'm7',
-        name: 'Мужичок-Боровичок',
-        address: 'ул. Почтовая 60, по центру улицы между лавочками',
-        inRoute: true,
-      },
-      {
-        id: 'm8',
-        name: 'Грибная команда',
-        address:
-          'Лыбедский бульвар, рядом с «Ёлкой» на спуске к Мюнстерской площади',
-        inRoute: true,
-      },
-      {
-        id: 'm9',
-        name: 'Гриб-Профессор',
-        address:
-          'ул. Ленина 53, рядом с Рязанским институтом (филиалом) Московского политеха',
-        inRoute: true,
-      },
-      {
-        id: 'm10',
-        name: 'Семейка «Грибы с глазами»',
-        address: 'ул. Ленина, 24',
-        inRoute: true,
-      },
-      {
-        id: 'm11',
-        name: 'Гриб-Пионер',
-        address: 'ул. Есенина 46, перед Дворцом Первых',
-        inRoute: true,
-      },
-      {
-        id: 'm12',
-        name: 'Грибная пара',
-        address: 'Театральная площадь возле фонтана',
-        inRoute: true,
-      },
-      {
-        id: 'm13',
-        name: 'Гриб-Рыбак',
-        address: 'район Канищево, ул. Интернациональная 27, рядом со школой №69',
-        inRoute: false,
-      },
-      {
-        id: 'm14',
-        name: 'Гриб-Строитель',
-        address: 'ул. Васильевская 20',
-        inRoute: false,
-      },
-    ],
-  },
-  {
-    id: 'ryazan-contrasts',
-    title: 'Экскурсия 2. Контрасты Рязани',
-    subtitle: 'История от Кремля до советского наследия',
-    rewardPoints: 500,
-    summary:
-      'Экскурсия проведёт вас через контрасты рязанской истории: от древнего Кремля — духовного символа «голубой Руси», воспетой Есениным, до памятника поэту на набережной, а затем по купеческой Почтовой к советскому наследию — памятнику Ленину, зданию Цирка и площади 26 Бакинских Комиссаров.',
-    stops: [
-      {
-        id: 'r1',
-        name: 'Площадь 26 Бакинских комиссаров',
-        address: 'Площадь 26 Бакинских комиссаров',
-        inRoute: true,
-      },
-      {
-        id: 'r2',
-        name: 'Цирк',
-        address: 'Здание цирка',
-        inRoute: true,
-      },
-      {
-        id: 'r3',
-        name: 'Рязанский Кремль',
-        address: 'Кремль',
-        inRoute: true,
-      },
-      {
-        id: 'r4',
-        name: 'Памятник Есенину',
-        address: 'Набережная',
-        inRoute: true,
-      },
-      {
-        id: 'r5',
-        name: 'Улица Почтовая',
-        address: 'Пешеходная улица Почтовая',
-        inRoute: true,
-      },
-      {
-        id: 'r6',
-        name: 'Памятник Ленину',
-        address: 'Площадь Ленина',
-        inRoute: true,
-      },
-    ],
-  },
-  {
-    id: 'gastrotour',
-    title: 'Гастротур. Центр и крафт',
-    subtitle: 'Два дня вкусов Рязани',
-    rewardPoints: 800,
-    summary:
-      'Двухдневный гастротур по Рязани: от традиционной кухни у Кремля до крафтовых баров и прогулки по сосновому лесу в Солотче.',
-    stops: [
-      {
-        id: 'g1',
-        name: 'День 1. Завтрак — «Чайная»',
-        address: 'ул. Соборная, 14/2',
-        inRoute: true,
-        note: 'Каравайцы со сметаной или рыбой + сбитень. У Кремля.',
-      },
-      {
-        id: 'g2',
-        name: 'День 1. Обед — Кремлёвская трапезная',
-        address: 'ул. Кремль, 8',
-        inRoute: true,
-        note: 'Грибная калья и курятник. На территории Кремля.',
-      },
-      {
-        id: 'g3',
-        name: 'День 1. Ужин — «Графин»',
-        address: 'ул. Татарская, 36',
-        inRoute: true,
-        note: 'Особняк XIX века. Котлета из лося или судак по-рязански.',
-      },
-      {
-        id: 'g4',
-        name: 'День 1. Бар — «ДУДКИ»',
-        address: 'ул. Ленина, 41А',
-        inRoute: true,
-        note: '40 сортов крафтового пива, пивная тарелка.',
-      },
-      {
-        id: 'g5',
-        name: 'День 2. Завтрак — «Лыбедь»',
-        address: 'Лыбедский бульвар, 1',
-        inRoute: true,
-        note: 'Блинчики с белыми грибами или драники с форелью.',
-      },
-      {
-        id: 'g6',
-        name: 'День 2. Обед — «Хорошие Руки. Рыба»',
-        address: 'ул. Семинарская, 1',
-        inRoute: true,
-        note: 'Том-ям, паста с морепродуктами, поке с угрём.',
-      },
-      {
-        id: 'g7',
-        name: 'День 2. Ужин — «Старый Мельник»',
-        address: 'Рязанская обл., Солотча, д. 24',
-        inRoute: true,
-        note: 'Кафе в сосновом лесу. Пельмени с бобрятиной, калинник.',
-      },
-      {
-        id: 'g8',
-        name: 'День 2. Бар — Grillside Rock Bar',
-        address: 'ул. Почтовая, 54 корп. 2',
-        inRoute: true,
-        note: 'Живая музыка, крафтовое пиво, коктейли, стейки и бургеры.',
-      },
-    ],
-  },
-]
-
-const LEVELS = [
-  {
-    rank: 1,
-    title: 'Прохожий',
-    threshold: '0',
-    bonus: 'Начальный уровень',
-  },
-  {
-    rank: 2,
-    title: 'Гость Рязани',
-    threshold: '500',
-    bonus: '+5% к баллам за тесты',
-  },
-  {
-    rank: 3,
-    title: 'Студент-краевед',
-    threshold: '1 500',
-    bonus: 'Доступ к скрытым маршрутам',
-  },
-  {
-    rank: 4,
-    title: 'Постоянный житель',
-    threshold: '3 000',
-    bonus: '+10% к баллам за чекины',
-  },
-  {
-    rank: 5,
-    title: 'Знаток Почтовой',
-    threshold: '5 500',
-    bonus: 'Уникальная цифровая ачивка',
-  },
-  {
-    rank: 6,
-    title: 'Гид-любитель',
-    threshold: '8 500',
-    bonus: 'Скидка 5% у всех партнеров (постоянная)',
-  },
-  {
-    rank: 7,
-    title: 'Хранитель традиций',
-    threshold: '12 000',
-    bonus: '+20% к баллам за всё',
-  },
-  {
-    rank: 8,
-    title: 'Посол Рязани',
-    threshold: '17 000',
-    bonus: 'Ранний доступ к новым квестам',
-  },
-  {
-    rank: 9,
-    title: 'Легенда города',
-    threshold: '25 000',
-    bonus: 'Бесплатный мерч в инфоцентре',
-  },
-  {
-    rank: 10,
-    title: 'Князь/Княгиня Рязанская',
-    threshold: '40 000',
-    bonus: 'VIP-статус: максимальные скидки (15–20%)',
-  },
-]
-
-const POINTS_SOURCES = [
-  'Check-in в точке (GPS): 50–100 баллов (зависит от удаленности места).',
-  'Прохождение мини‑теста (3 вопроса): 150 баллов (по 50 за верный ответ).',
-  'Завершение полного маршрута: +500 баллов бонусом.',
-  'Загрузка фото с места: +50 баллов (после модерации или проверки ИИ).',
-  'Ежедневный вход в приложение: 10–20 баллов.',
-]
-
-const REWARD_TIERS = [
-  {
-    title: 'Кофейни и заведения',
-    items: [
-      '200–300 баллов: бесплатный сироп или добавка к кофе.',
-      '500–700 баллов: скидка 15–20% на любой напиток.',
-      '1 200–1 500 баллов: купон на бесплатный кофе (капучино/раф 0.3).',
-      '2 500 баллов: сет «Завтрак туриста» со скидкой 50%.',
-    ],
-  },
-  {
-    title: 'Микротранспорт и досуг',
-    items: [
-      '400 баллов: промокод на отмену платного старта на самокате.',
-      '800–1 000 баллов: 15–20 минут бесплатной поездки на самокате/велосипеде.',
-      '2 000 баллов: скидка 30% на билет на теплоход по Оке.',
-      '5 000 баллов: бесплатный билет на прогулочный теплоход или экскурсию с гидом.',
-    ],
-  },
-]
-
-const getCookie = (name) => {
-  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'))
-  return match ? decodeURIComponent(match[2]) : null
-}
-
-const ensureCsrf = async () => {
-  await fetch(`${API_BASE}/api/auth/csrf/`, {
-    credentials: 'include',
-  })
-}
-
-const parseSet = (value) => new Set(Array.isArray(value) ? value : [])
-
-const parseRouteStamps = (value) => {
-  if (!value || typeof value !== 'object') return {}
-  const next = {}
-  Object.entries(value).forEach(([key, items]) => {
-    next[key] = new Set(Array.isArray(items) ? items : [])
-  })
-  return next
-}
-
-const serializeRouteStamps = (value) => {
-  const next = {}
-  if (!value || typeof value !== 'object') return next
-  Object.entries(value).forEach(([key, items]) => {
-    next[key] = Array.from(items || [])
-  })
-  return next
-}
 
 const PageShell = ({ title, subtitle, children }) => (
   <div className="page page-standalone">
@@ -690,25 +204,11 @@ const FullMapPage = ({
           <h2>Выбери экскурсию</h2>
           <p>Сравни маршруты и открой подробности одним кликом.</p>
         </header>
-        <div className="cards">
-          {ROUTES.filter((route) => !completedRoutes.has(route.id)).map((route) => (
-            <article key={route.id} className="card route-card">
-              <h3>{route.title}</h3>
-              <p>{route.subtitle}</p>
-              <div className="card-tags">
-                <span>{route.stops.filter((stop) => stop.inRoute).length} точек</span>
-                <span>+{route.rewardPoints} баллов</span>
-              </div>
-              <button
-                className="ghost"
-                type="button"
-                onClick={() => onOpenRoute(route)}
-              >
-                Подробнее
-              </button>
-            </article>
-          ))}
-        </div>
+        <RouteCards
+          routes={ROUTES}
+          completedRoutes={completedRoutes}
+          onOpenRoute={onOpenRoute}
+        />
       </section>
     </div>
   )
@@ -802,25 +302,11 @@ const Home = ({
             Городские квесты, гастротуры и прогулки с бонусами.
           </p>
         </header>
-        <div className="cards">
-          {ROUTES.filter((route) => !completedRoutes.has(route.id)).map((route) => (
-            <article key={route.id} className="card route-card">
-              <h3>{route.title}</h3>
-              <p>{route.subtitle}</p>
-              <div className="card-tags">
-                <span>{route.stops.filter((stop) => stop.inRoute).length} точек</span>
-                <span>+{route.rewardPoints} баллов</span>
-              </div>
-              <button
-                className="ghost"
-                type="button"
-                onClick={() => onOpenModal('route', route)}
-              >
-                Подробнее
-              </button>
-            </article>
-          ))}
-        </div>
+        <RouteCards
+          routes={ROUTES}
+          completedRoutes={completedRoutes}
+          onOpenRoute={(route) => onOpenModal('route', route)}
+        />
       </section>
 
       <section id="kids" className="page">
@@ -1339,16 +825,6 @@ function App() {
     window.speechSynthesis.speak(utterance)
   }
 
-  const isPointInBounds = (coords, bounds) => {
-    const [lat, lng] = coords
-    const [[lat1, lng1], [lat2, lng2]] = bounds
-    const minLat = Math.min(lat1, lat2)
-    const maxLat = Math.max(lat1, lat2)
-    const minLng = Math.min(lng1, lng2)
-    const maxLng = Math.max(lng1, lng2)
-    return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng
-  }
-
   const tryCaptureTerritory = (coords) => {
     const territory = TERRITORIES.find((item) => isPointInBounds(coords, item.bounds))
     if (!territory) return
@@ -1620,27 +1096,11 @@ function App() {
                 title="Экскурсии и квесты"
                 subtitle="Сюжетные маршруты, QR-точки и задания."
               >
-                <div className="cards">
-                  {ROUTES.filter((route) => !completedRoutes.has(route.id)).map((route) => (
-                    <article key={route.id} className="card route-card">
-                      <h3>{route.title}</h3>
-                      <p>{route.subtitle}</p>
-                      <div className="card-tags">
-                        <span>
-                          {route.stops.filter((stop) => stop.inRoute).length} точек
-                        </span>
-                        <span>+{route.rewardPoints} баллов</span>
-                      </div>
-                      <button
-                        className="ghost"
-                        type="button"
-                        onClick={() => openModal('route', route)}
-                      >
-                        Подробнее
-                      </button>
-                    </article>
-                  ))}
-                </div>
+                <RouteCards
+                  routes={ROUTES}
+                  completedRoutes={completedRoutes}
+                  onOpenRoute={(route) => openModal('route', route)}
+                />
               </PageShell>
             </Shell>
           }
