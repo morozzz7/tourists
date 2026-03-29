@@ -589,6 +589,23 @@ h1 {
   display: flex;
 }
 
+.map-page-full {
+  height: 100dvh;
+  min-height: 100vh;
+  padding: 20px clamp(12px, 2vw, 24px);
+}
+
+.map-page-full .map-page-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.map-page-full .map-shell,
+.map-page-full .map-frame {
+  height: 100%;
+  min-height: 100%;
+}
+
 .page-standalone {
   max-width: 1240px;
   width: min(100%, 1240px);
@@ -1489,7 +1506,29 @@ h1 {
   }
 
   .chat-dock {
-    right: 16px;
-    bottom: 2px;
+    right: 0;
+    left: 0;
+    bottom: 0;
+    padding: 0 12px 12px;
+    justify-content: flex-end;
+  }
+
+  .chat-panel {
+    width: 100%;
+    height: calc(100dvh - 24px);
+    max-height: calc(100dvh - 24px);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(20px);
+  }
+
+  .chat-dock.open .chat-panel {
+    transform: translateY(0);
+  }
+
+  .chat-body {
+    flex: 1;
+    max-height: none;
   }
 }

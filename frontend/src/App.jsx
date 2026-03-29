@@ -15,10 +15,12 @@ const demoMessages = [
 ]
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+const GUEST_POINTS = 1240
 
 const formatNumber = (value) => value.toLocaleString('ru-RU')
 const calculateLevel = (points) => Math.floor(points / 500) + 1
-const DISABLE_GEO_CHECK = true
+const DISABLE_GEO_CHECK = false
+const DISABLE_GEO_WATCH = false
 const normalizeName = (value) =>
   String(value || '')
     .toLowerCase()
@@ -498,6 +500,26 @@ const ensureCsrf = async () => {
   })
 }
 
+const parseSet = (value) => new Set(Array.isArray(value) ? value : [])
+
+const parseRouteStamps = (value) => {
+  if (!value || typeof value !== 'object') return {}
+  const next = {}
+  Object.entries(value).forEach(([key, items]) => {
+    next[key] = new Set(Array.isArray(items) ? items : [])
+  })
+  return next
+}
+
+const serializeRouteStamps = (value) => {
+  const next = {}
+  if (!value || typeof value !== 'object') return next
+  Object.entries(value).forEach(([key, items]) => {
+    next[key] = Array.from(items || [])
+  })
+  return next
+}
+
 const PageShell = ({ title, subtitle, children }) => (
   <div className="page page-standalone">
     <header>
@@ -587,10 +609,8 @@ const FullMapPage = ({
   locationStatus,
   locationError,
   autoCapturedIds,
-  onOpenRoute,
   routeStops,
   routePath,
-  completedRoutes,
 }) => {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams();
@@ -639,7 +659,7 @@ const FullMapPage = ({
   }, [poiId, onSelectPoi, navigate, openedPoiId])
 
   return (
-    <div className="map-page">
+    <div className="map-page map-page-full">
       <div className="map-page-header">
         <div>
           <p className="eyebrow">Карта</p>
@@ -661,32 +681,6 @@ const FullMapPage = ({
           routePath={routePath}
         />
       </div>
-      <section className="page">
-        <header>
-          <p className="eyebrow">Маршруты</p>
-          <h2>Выбери экскурсию</h2>
-          <p>Сравни маршруты и открой подробности одним кликом.</p>
-        </header>
-        <div className="cards">
-          {ROUTES.filter((route) => !completedRoutes.has(route.id)).map((route) => (
-            <article key={route.id} className="card route-card">
-              <h3>{route.title}</h3>
-              <p>{route.subtitle}</p>
-              <div className="card-tags">
-                <span>{route.stops.filter((stop) => stop.inRoute).length} точек</span>
-                <span>+{route.rewardPoints} баллов</span>
-              </div>
-              <button
-                className="ghost"
-                type="button"
-                onClick={() => onOpenRoute(route)}
-              >
-                Подробнее
-              </button>
-            </article>
-          ))}
-        </div>
-      </section>
     </div>
   )
 }
@@ -909,7 +903,7 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia('(min-width: 901px)').matches : true,
   )
-  const [points, setPoints] = useState(1240)
+  const [points, setPoints] = useState(GUEST_POINTS)
   const [collectedCards, setCollectedCards] = useState(new Set())
   const [checkinStatus, setCheckinStatus] = useState({})
   const [userLocation, setUserLocation] = useState(null)
@@ -927,6 +921,9 @@ function App() {
   const [activeRouteId, setActiveRouteId] = useState(null)
   const [routeStamps, setRouteStamps] = useState({})
   const [completedRoutes, setCompletedRoutes] = useState(new Set())
+  const [progressReady, setProgressReady] = useState(false)
+  const saveTimerRef = useRef(null)
+  const lastSavedRef = useRef('')
   const level = calculateLevel(points)
   const nextLevelAt = level * 500
   const pointsToNext = Math.max(nextLevelAt - points, 0)
@@ -954,6 +951,10 @@ function App() {
   useEffect(() => {
     if (!navigator.geolocation) {
       setLocationStatus('unsupported')
+      return undefined
+    }
+    if (DISABLE_GEO_WATCH) {
+      setLocationStatus('idle')
       return undefined
     }
     setLocationStatus('requesting')
@@ -991,6 +992,60 @@ function App() {
     return () => navigator.geolocation.clearWatch(watchId)
   }, [])
 
+  const resetProgressToGuest = () => {
+    setPoints(GUEST_POINTS)
+    setCollectedCards(new Set())
+    setPurchasedRewards(new Set())
+    setMyRoutes(new Set())
+    setCompletedRoutes(new Set())
+    setRouteStamps({})
+    setActiveRouteId(null)
+  }
+
+  const applyProgress = (data) => {
+    setPoints(typeof data?.points === 'number' ? data.points : 0)
+    setCollectedCards(parseSet(data?.collected_cards))
+    setPurchasedRewards(parseSet(data?.purchased_rewards))
+    setMyRoutes(parseSet(data?.started_routes))
+    setCompletedRoutes(parseSet(data?.completed_routes))
+    setRouteStamps(parseRouteStamps(data?.route_stamps))
+    setActiveRouteId(data?.active_route_id || null)
+  }
+
+  const buildProgressPayload = () => ({
+    points,
+    collected_cards: Array.from(collectedCards),
+    purchased_rewards: Array.from(purchasedRewards),
+    started_routes: Array.from(myRoutes),
+    completed_routes: Array.from(completedRoutes),
+    route_stamps: serializeRouteStamps(routeStamps),
+    active_route_id: activeRouteId || '',
+  })
+
+  const loadProgress = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/progress/`, {
+        credentials: 'include',
+      })
+      if (!response.ok) return
+      const data = await response.json()
+      applyProgress(data)
+      const serialized = JSON.stringify({
+        points: typeof data?.points === 'number' ? data.points : 0,
+        collected_cards: Array.isArray(data?.collected_cards) ? data.collected_cards : [],
+        purchased_rewards: Array.isArray(data?.purchased_rewards) ? data.purchased_rewards : [],
+        started_routes: Array.isArray(data?.started_routes) ? data.started_routes : [],
+        completed_routes: Array.isArray(data?.completed_routes) ? data.completed_routes : [],
+        route_stamps: typeof data?.route_stamps === 'object' && data?.route_stamps ? data.route_stamps : {},
+        active_route_id: data?.active_route_id || '',
+      })
+      lastSavedRef.current = serialized
+      setProgressReady(true)
+    } catch {
+      // ignore
+    }
+  }
+
   useEffect(() => {
     const fetchMe = async () => {
       try {
@@ -1009,6 +1064,16 @@ function App() {
     }
     fetchMe()
   }, [])
+
+  useEffect(() => {
+    if (!user) {
+      setProgressReady(false)
+      lastSavedRef.current = ''
+      return
+    }
+    setProgressReady(false)
+    loadProgress()
+  }, [user?.email])
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))
@@ -1093,10 +1158,12 @@ function App() {
   }
 
   const handleAddRoute = (routeId) => {
+    if (completedRoutes.has(routeId)) return
     setMyRoutes((prev) => new Set(prev).add(routeId))
   }
 
   const handleStartRoute = (routeId) => {
+    if (completedRoutes.has(routeId)) return
     setActiveRouteId(routeId)
     setMyRoutes((prev) => new Set(prev).add(routeId))
   }
@@ -1111,7 +1178,54 @@ function App() {
       return next
     })
     setPoints((prev) => prev + route.rewardPoints)
+    setSelectedRoute(null)
+    setModalType(null)
   }
+
+  useEffect(() => {
+    if (!user || !progressReady) return undefined
+    const payload = buildProgressPayload()
+    const serialized = JSON.stringify(payload)
+    if (serialized === lastSavedRef.current) return undefined
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current)
+    }
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        await ensureCsrf()
+        const csrf = getCookie('csrftoken')
+        const response = await fetch(`${API_BASE}/api/progress/`, {
+          method: 'PUT',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrf || '',
+          },
+          body: serialized,
+        })
+        if (response.ok) {
+          lastSavedRef.current = serialized
+        }
+      } catch {
+        // ignore
+      }
+    }, 500)
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current)
+      }
+    }
+  }, [
+    user,
+    progressReady,
+    points,
+    collectedCards,
+    purchasedRewards,
+    myRoutes,
+    completedRoutes,
+    routeStamps,
+    activeRouteId,
+  ])
 
   const handleAuth = async () => {
     setAuthLoading(true)
@@ -1163,6 +1277,12 @@ function App() {
       })
       setUser(null)
       setProfile({ name: '', email: '' })
+      resetProgressToGuest()
+      setProgressReady(false)
+      lastSavedRef.current = ''
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current)
+      }
     } catch {
       // ignore
     }
@@ -1432,10 +1552,8 @@ function App() {
                 locationStatus={locationStatus}
                 locationError={locationError}
                 autoCapturedIds={capturedTerritories}
-                onOpenRoute={(route) => openModal('route', route)}
                 routeStops={activeRouteStops}
                 routePath={activeRoutePath}
-                completedRoutes={completedRoutes}
               />
             </Shell>
           }
@@ -1901,6 +2019,7 @@ function App() {
                     <input
                       type="text"
                       placeholder="Имя"
+                      autoComplete="name"
                       value={profile.name}
                       onChange={(event) =>
                         setProfile((prev) => ({ ...prev, name: event.target.value }))
@@ -1910,6 +2029,7 @@ function App() {
                   <input
                     type="email"
                     placeholder="Email"
+                    autoComplete="email"
                     value={profile.email}
                     onChange={(event) =>
                       setProfile((prev) => ({ ...prev, email: event.target.value }))
@@ -1918,6 +2038,7 @@ function App() {
                   <input
                     type="password"
                     placeholder="Пароль"
+                    autoComplete={authMode === 'register' ? 'new-password' : 'current-password'}
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                   />
@@ -1969,6 +2090,7 @@ function App() {
                       className="ghost"
                       type="button"
                       onClick={() => handleAddRoute(selectedRoute.id)}
+                      disabled={completedRoutes.has(selectedRoute.id)}
                     >
                       Добавить к себе
                     </button>
@@ -1978,8 +2100,11 @@ function App() {
                       className="primary"
                       type="button"
                       onClick={() => handleStartRoute(selectedRoute.id)}
+                      disabled={completedRoutes.has(selectedRoute.id)}
                     >
-                      Начать маршрут
+                      {completedRoutes.has(selectedRoute.id)
+                        ? 'Маршрут завершен'
+                        : 'Начать маршрут'}
                     </button>
                   )}
                   {activeRouteId === selectedRoute.id && (

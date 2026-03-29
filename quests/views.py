@@ -21,7 +21,7 @@ import math
 import json
 import uuid
 
-from .models import PointOfInterest, POIQRCode
+from .models import PointOfInterest, POIQRCode, UserProgress
 from .serializers import PointOfInterestSerializer, POIQRCodeSerializer
 
 
@@ -259,6 +259,48 @@ def me(request):
             "email": request.user.email,
         }
     )
+
+
+def _serialize_progress(progress: UserProgress):
+    return {
+        "points": progress.points,
+        "collected_cards": progress.collected_cards or [],
+        "purchased_rewards": progress.purchased_rewards or [],
+        "started_routes": progress.started_routes or [],
+        "completed_routes": progress.completed_routes or [],
+        "route_stamps": progress.route_stamps or {},
+        "active_route_id": progress.active_route_id or "",
+    }
+
+
+@api_view(["GET", "PUT", "PATCH"])
+def user_progress(request):
+    if not request.user.is_authenticated:
+        return Response({"authenticated": False}, status=401)
+
+    progress, _ = UserProgress.objects.get_or_create(user=request.user)
+
+    if request.method == "GET":
+        return Response(_serialize_progress(progress))
+
+    payload = request.data or {}
+    if "points" in payload:
+        progress.points = int(payload.get("points") or 0)
+    if "collected_cards" in payload and isinstance(payload.get("collected_cards"), list):
+        progress.collected_cards = payload.get("collected_cards")
+    if "purchased_rewards" in payload and isinstance(payload.get("purchased_rewards"), list):
+        progress.purchased_rewards = payload.get("purchased_rewards")
+    if "started_routes" in payload and isinstance(payload.get("started_routes"), list):
+        progress.started_routes = payload.get("started_routes")
+    if "completed_routes" in payload and isinstance(payload.get("completed_routes"), list):
+        progress.completed_routes = payload.get("completed_routes")
+    if "route_stamps" in payload and isinstance(payload.get("route_stamps"), dict):
+        progress.route_stamps = payload.get("route_stamps")
+    if "active_route_id" in payload:
+        progress.active_route_id = payload.get("active_route_id") or ""
+
+    progress.save()
+    return Response(_serialize_progress(progress))
 
 def haversine(lat1, lng1, lat2, lng2):
     R = 6371000

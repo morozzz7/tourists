@@ -1,6 +1,7 @@
 # quests/models.py
 import uuid
 from django.db import models
+from django.contrib.auth.models import User
 
 
 class PointOfInterest(models.Model):
@@ -47,3 +48,22 @@ class POIQRCode(models.Model):
 
     def __str__(self):
         return f"{self.poi.title} - {self.code}"
+
+
+class UserProgress(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='progress')
+    points = models.IntegerField(default=0, verbose_name="Баллы пользователя")
+    collected_cards = models.JSONField(default=list, blank=True, verbose_name="Собранные карточки")
+    purchased_rewards = models.JSONField(default=list, blank=True, verbose_name="Купленные награды")
+    started_routes = models.JSONField(default=list, blank=True, verbose_name="Начатые маршруты")
+    completed_routes = models.JSONField(default=list, blank=True, verbose_name="Завершенные маршруты")
+    route_stamps = models.JSONField(default=dict, blank=True, verbose_name="Штампы маршрутов")
+    active_route_id = models.CharField(max_length=100, blank=True, default="", verbose_name="Активный маршрут")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Прогресс пользователя"
+        verbose_name_plural = "Прогресс пользователей"
+
+    def __str__(self):
+        return f"Progress for {self.user.username}"
